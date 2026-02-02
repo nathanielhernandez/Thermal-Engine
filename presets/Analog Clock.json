@@ -1,0 +1,52 @@
+{
+  "name": "Analog Clock",
+  "background_color": "#000000",
+  "display_width": 1280,
+  "display_height": 480,
+  "elements": [
+    {
+      "type": "analog_clock",
+      "name": "analog_clock_6",
+      "x": 640,
+      "y": 240,
+      "width": 200,
+      "height": 50,
+      "radius": 160,
+      "color": "#ffffff",
+      "color_opacity": 100,
+      "background_color": "#1a1a2e",
+      "background_color_opacity": 0,
+      "text": "Label",
+      "font_size": 32,
+      "font_family": "Arial",
+      "font_bold": false,
+      "font_italic": false,
+      "text_align": "center",
+      "clip": false,
+      "source": "static",
+      "value": 50.0,
+      "image_path": "",
+      "scale_proportionally": true,
+      "aspect_ratio": 1.0,
+      "show_background": true,
+      "show_label": true,
+      "show_gradient": true,
+      "rounded_corners": false,
+      "gradient_fill": false,
+      "bar_text_mode": "full",
+      "bar_text_position": "inside",
+      "auto_color_change": true,
+      "gif_path": "",
+      "scale_mode": "fit",
+      "show_seconds_hand": true,
+      "show_clock_border": false,
+      "clock_face_style": "ticks",
+      "smooth_animation": true
+    }
+  ],
+  "video_background": {
+    "video_path": "",
+    "fit_mode": "fit_height",
+    "enabled": false
+  }
+}

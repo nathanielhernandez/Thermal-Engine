@@ -1,0 +1,21 @@
+# Thermal Engine - Python Dependencies
+
+# Qt GUI framework
+PySide6>=6.5.0
+
+# Image processing
+Pillow>=10.0.0
+
+# System monitoring
+psutil>=5.9.0
+
+# HID device communication (for LCD display)
+hidapi>=0.14.0
+
+# Video background support (optional)
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# LibreHardwareMonitor integration (for GPU/CPU sensors)
+pythonnet>=3.0.0
+clr-loader>=0.2.6
