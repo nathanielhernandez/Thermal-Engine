@@ -1150,189 +1150,259 @@ class PropertiesPanel(QWidget):
             element.x = int(x)
             element.y = int(y)
 
+    def get_alignment_units(self):
+        """
+        Get alignment units - groups are treated as single units, ungrouped elements as individual units.
+        Returns list of dicts: {'elements': [elements], 'bounds': (x, y, w, h)}
+        """
+        units = []
+        grouped = {}  # group_name -> [elements]
+
+        for el in self.multi_selection_elements:
+            if el.group:
+                if el.group not in grouped:
+                    grouped[el.group] = []
+                grouped[el.group].append(el)
+            else:
+                # Ungrouped element is its own unit
+                bounds = self.get_element_bounds(el)
+                units.append({'elements': [el], 'bounds': bounds})
+
+        # Add grouped elements as single units
+        for group_name, elements in grouped.items():
+            # Calculate combined bounding box for the group
+            min_x = float('inf')
+            min_y = float('inf')
+            max_x = float('-inf')
+            max_y = float('-inf')
+
+            for el in elements:
+                x, y, w, h = self.get_element_bounds(el)
+                min_x = min(min_x, x)
+                min_y = min(min_y, y)
+                max_x = max(max_x, x + w)
+                max_y = max(max_y, y + h)
+
+            bounds = (min_x, min_y, max_x - min_x, max_y - min_y)
+            units.append({'elements': elements, 'bounds': bounds})
+
+        return units
+
+    def move_unit(self, unit, new_x, new_y):
+        """Move an alignment unit to a new position (top-left of bounding box)."""
+        old_x, old_y, _, _ = unit['bounds']
+        dx = new_x - old_x
+        dy = new_y - old_y
+
+        for el in unit['elements']:
+            el_x, el_y, _, _ = self.get_element_bounds(el)
+            self.set_element_position(el, el_x + dx, el_y + dy)
+
     def align_left(self):
-        """Align all selected elements to the left edge."""
+        """Align all selected elements/groups to the left edge."""
         if len(self.multi_selection_elements) < 2:
             return
 
         self.alignment_will_change.emit()
-        min_x = float('inf')
-        for el in self.multi_selection_elements:
-            x, y, w, h = self.get_element_bounds(el)
-            min_x = min(min_x, x)
+        units = self.get_alignment_units()
+        if len(units) < 2:
+            self.alignment_changed.emit()
+            return
 
-        for el in self.multi_selection_elements:
-            x, y, w, h = self.get_element_bounds(el)
-            self.set_element_position(el, min_x, y)
+        # Find minimum x across all units
+        min_x = min(unit['bounds'][0] for unit in units)
+
+        # Move each unit to align left
+        for unit in units:
+            x, y, w, h = unit['bounds']
+            self.move_unit(unit, min_x, y)
 
         self.alignment_changed.emit()
         self.property_changed.emit()
 
     def align_h_center(self):
-        """Align all selected elements to horizontal center."""
+        """Align all selected elements/groups to horizontal center."""
         if len(self.multi_selection_elements) < 2:
             return
 
         self.alignment_will_change.emit()
-        # Find the combined bounding box
-        min_x = float('inf')
-        max_x = float('-inf')
-        for el in self.multi_selection_elements:
-            x, y, w, h = self.get_element_bounds(el)
-            min_x = min(min_x, x)
-            max_x = max(max_x, x + w)
+        units = self.get_alignment_units()
+        if len(units) < 2:
+            self.alignment_changed.emit()
+            return
 
+        # Find the combined bounding box of all units
+        min_x = min(unit['bounds'][0] for unit in units)
+        max_x = max(unit['bounds'][0] + unit['bounds'][2] for unit in units)
         center_x = (min_x + max_x) / 2
 
-        for el in self.multi_selection_elements:
-            x, y, w, h = self.get_element_bounds(el)
+        # Move each unit to center
+        for unit in units:
+            x, y, w, h = unit['bounds']
             new_x = center_x - w / 2
-            self.set_element_position(el, new_x, y)
+            self.move_unit(unit, new_x, y)
 
         self.alignment_changed.emit()
         self.property_changed.emit()
 
     def align_right(self):
-        """Align all selected elements to the right edge."""
+        """Align all selected elements/groups to the right edge."""
         if len(self.multi_selection_elements) < 2:
             return
 
         self.alignment_will_change.emit()
-        max_right = float('-inf')
-        for el in self.multi_selection_elements:
-            x, y, w, h = self.get_element_bounds(el)
-            max_right = max(max_right, x + w)
+        units = self.get_alignment_units()
+        if len(units) < 2:
+            self.alignment_changed.emit()
+            return
 
-        for el in self.multi_selection_elements:
-            x, y, w, h = self.get_element_bounds(el)
-            self.set_element_position(el, max_right - w, y)
+        # Find maximum right edge across all units
+        max_right = max(unit['bounds'][0] + unit['bounds'][2] for unit in units)
+
+        # Move each unit to align right
+        for unit in units:
+            x, y, w, h = unit['bounds']
+            self.move_unit(unit, max_right - w, y)
 
         self.alignment_changed.emit()
         self.property_changed.emit()
 
     def align_top(self):
-        """Align all selected elements to the top edge."""
+        """Align all selected elements/groups to the top edge."""
         if len(self.multi_selection_elements) < 2:
             return
 
         self.alignment_will_change.emit()
-        min_y = float('inf')
-        for el in self.multi_selection_elements:
-            x, y, w, h = self.get_element_bounds(el)
-            min_y = min(min_y, y)
+        units = self.get_alignment_units()
+        if len(units) < 2:
+            self.alignment_changed.emit()
+            return
 
-        for el in self.multi_selection_elements:
-            x, y, w, h = self.get_element_bounds(el)
-            self.set_element_position(el, x, min_y)
+        # Find minimum y across all units
+        min_y = min(unit['bounds'][1] for unit in units)
+
+        # Move each unit to align top
+        for unit in units:
+            x, y, w, h = unit['bounds']
+            self.move_unit(unit, x, min_y)
 
         self.alignment_changed.emit()
         self.property_changed.emit()
 
     def align_v_middle(self):
-        """Align all selected elements to vertical center."""
+        """Align all selected elements/groups to vertical center."""
         if len(self.multi_selection_elements) < 2:
             return
 
         self.alignment_will_change.emit()
-        min_y = float('inf')
-        max_y = float('-inf')
-        for el in self.multi_selection_elements:
-            x, y, w, h = self.get_element_bounds(el)
-            min_y = min(min_y, y)
-            max_y = max(max_y, y + h)
+        units = self.get_alignment_units()
+        if len(units) < 2:
+            self.alignment_changed.emit()
+            return
 
+        # Find the combined bounding box of all units
+        min_y = min(unit['bounds'][1] for unit in units)
+        max_y = max(unit['bounds'][1] + unit['bounds'][3] for unit in units)
         center_y = (min_y + max_y) / 2
 
-        for el in self.multi_selection_elements:
-            x, y, w, h = self.get_element_bounds(el)
+        # Move each unit to center
+        for unit in units:
+            x, y, w, h = unit['bounds']
             new_y = center_y - h / 2
-            self.set_element_position(el, x, new_y)
+            self.move_unit(unit, x, new_y)
 
         self.alignment_changed.emit()
         self.property_changed.emit()
 
     def align_bottom(self):
-        """Align all selected elements to the bottom edge."""
+        """Align all selected elements/groups to the bottom edge."""
         if len(self.multi_selection_elements) < 2:
             return
 
         self.alignment_will_change.emit()
-        max_bottom = float('-inf')
-        for el in self.multi_selection_elements:
-            x, y, w, h = self.get_element_bounds(el)
-            max_bottom = max(max_bottom, y + h)
+        units = self.get_alignment_units()
+        if len(units) < 2:
+            self.alignment_changed.emit()
+            return
 
-        for el in self.multi_selection_elements:
-            x, y, w, h = self.get_element_bounds(el)
-            self.set_element_position(el, x, max_bottom - h)
+        # Find maximum bottom edge across all units
+        max_bottom = max(unit['bounds'][1] + unit['bounds'][3] for unit in units)
+
+        # Move each unit to align bottom
+        for unit in units:
+            x, y, w, h = unit['bounds']
+            self.move_unit(unit, x, max_bottom - h)
 
         self.alignment_changed.emit()
         self.property_changed.emit()
 
     def distribute_horizontal(self):
-        """Distribute elements evenly horizontally."""
+        """Distribute elements/groups evenly horizontally."""
         if len(self.multi_selection_elements) < 3:
             return
 
         self.alignment_will_change.emit()
+        units = self.get_alignment_units()
+        if len(units) < 3:
+            self.alignment_changed.emit()
+            return
 
-        # Sort elements by x position
-        elements_with_bounds = []
-        for el in self.multi_selection_elements:
-            x, y, w, h = self.get_element_bounds(el)
-            elements_with_bounds.append((el, x, y, w, h))
-        elements_with_bounds.sort(key=lambda e: e[1])
+        # Sort units by x position
+        units.sort(key=lambda u: u['bounds'][0])
 
         # Get total span
-        first_x = elements_with_bounds[0][1]
-        last_el = elements_with_bounds[-1]
-        last_right = last_el[1] + last_el[3]
+        first_x = units[0]['bounds'][0]
+        last_unit = units[-1]
+        last_right = last_unit['bounds'][0] + last_unit['bounds'][2]
 
-        # Calculate total element width
-        total_width = sum(e[3] for e in elements_with_bounds)
+        # Calculate total unit width
+        total_width = sum(u['bounds'][2] for u in units)
 
         # Calculate gaps
         available_space = last_right - first_x - total_width
-        gap = available_space / (len(elements_with_bounds) - 1)
+        gap = available_space / (len(units) - 1)
 
-        # Position elements
+        # Position units
         current_x = first_x
-        for el, x, y, w, h in elements_with_bounds:
-            self.set_element_position(el, current_x, y)
+        for unit in units:
+            x, y, w, h = unit['bounds']
+            self.move_unit(unit, current_x, y)
             current_x += w + gap
 
         self.alignment_changed.emit()
         self.property_changed.emit()
 
     def distribute_vertical(self):
-        """Distribute elements evenly vertically."""
+        """Distribute elements/groups evenly vertically."""
         if len(self.multi_selection_elements) < 3:
             return
 
         self.alignment_will_change.emit()
-        # Sort elements by y position
-        elements_with_bounds = []
-        for el in self.multi_selection_elements:
-            x, y, w, h = self.get_element_bounds(el)
-            elements_with_bounds.append((el, x, y, w, h))
-        elements_with_bounds.sort(key=lambda e: e[2])
+        units = self.get_alignment_units()
+        if len(units) < 3:
+            self.alignment_changed.emit()
+            return
+
+        # Sort units by y position
+        units.sort(key=lambda u: u['bounds'][1])
 
         # Get total span
-        first_y = elements_with_bounds[0][2]
-        last_el = elements_with_bounds[-1]
-        last_bottom = last_el[2] + last_el[4]
+        first_y = units[0]['bounds'][1]
+        last_unit = units[-1]
+        last_bottom = last_unit['bounds'][1] + last_unit['bounds'][3]
 
-        # Calculate total element height
-        total_height = sum(e[4] for e in elements_with_bounds)
+        # Calculate total unit height
+        total_height = sum(u['bounds'][3] for u in units)
 
         # Calculate gaps
         available_space = last_bottom - first_y - total_height
-        gap = available_space / (len(elements_with_bounds) - 1)
+        gap = available_space / (len(units) - 1)
 
-        # Position elements
+        # Position units
         current_y = first_y
-        for el, x, y, w, h in elements_with_bounds:
-            self.set_element_position(el, x, current_y)
+        for unit in units:
+            x, y, w, h = unit['bounds']
+            self.move_unit(unit, x, current_y)
             current_y += h + gap
 
         self.alignment_changed.emit()
