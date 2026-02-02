@@ -36,8 +36,8 @@ env/
 # DLLs - downloaded by install script
 *.dll
 
-# Claude Code
-.claude/
+# Local config
+.ai/
 
 # OS files
 .DS_Store
@@ -49,6 +49,9 @@ desktop.ini
 *.bak
 *.log
 nul
+
+# User settings
+settings.json
 
 # User themes (keep presets folder structure but not user files)
 # Uncomment below if you want to exclude user presets:

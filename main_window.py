@@ -13,7 +13,8 @@ import psutil
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QLineEdit, QColorDialog, QFileDialog,
-    QComboBox, QSplitter, QMessageBox, QToolBar, QStatusBar, QTabWidget
+    QComboBox, QSplitter, QMessageBox, QToolBar, QStatusBar, QTabWidget,
+    QDialog, QCheckBox, QDialogButtonBox, QGroupBox, QFormLayout, QSystemTrayIcon
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor, QAction, QKeySequence
@@ -150,6 +151,7 @@ def get_value_with_unit(value, source):
 from element import ThemeElement
 import sensors
 from sensors import init_sensors, get_lhm_sensors, get_lhm_sensors_sync, stop_sensors
+import settings
 
 
 def hex_to_rgba(hex_color, opacity=100):
@@ -404,6 +406,13 @@ class ThemeEditorWindow(QMainWindow):
         diagnose_action = QAction("Diagnose Sensors...", self)
         diagnose_action.triggered.connect(self.diagnose_sensors)
         display_menu.addAction(diagnose_action)
+
+        # Settings menu
+        settings_menu = menubar.addMenu("Settings")
+
+        settings_action = QAction("Preferences...", self)
+        settings_action.triggered.connect(self.show_settings)
+        settings_menu.addAction(settings_action)
 
     def setup_toolbar(self):
         toolbar = QToolBar("Main Toolbar")
@@ -1915,7 +1924,85 @@ class ThemeEditorWindow(QMainWindow):
             self.device.write(bytes([0x00]) + chunk)
             offset += 512
 
+    def show_settings(self):
+        """Show the settings dialog."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Preferences")
+        dialog.setMinimumWidth(350)
+
+        layout = QVBoxLayout(dialog)
+
+        # Startup group
+        startup_group = QGroupBox("Startup")
+        startup_layout = QVBoxLayout(startup_group)
+
+        self.launch_at_login_cb = QCheckBox("Launch at Windows startup")
+        self.launch_at_login_cb.setChecked(settings.get_setting("launch_at_login", True))
+        startup_layout.addWidget(self.launch_at_login_cb)
+
+        self.launch_minimized_cb = QCheckBox("Start minimized to system tray")
+        self.launch_minimized_cb.setChecked(settings.get_setting("launch_minimized", True))
+        startup_layout.addWidget(self.launch_minimized_cb)
+
+        layout.addWidget(startup_group)
+
+        # Behavior group
+        behavior_group = QGroupBox("Behavior")
+        behavior_layout = QVBoxLayout(behavior_group)
+
+        self.minimize_to_tray_cb = QCheckBox("Minimize to system tray instead of taskbar")
+        self.minimize_to_tray_cb.setChecked(settings.get_setting("minimize_to_tray", True))
+        behavior_layout.addWidget(self.minimize_to_tray_cb)
+
+        self.close_to_tray_cb = QCheckBox("Close button minimizes to tray")
+        self.close_to_tray_cb.setChecked(settings.get_setting("close_to_tray", True))
+        behavior_layout.addWidget(self.close_to_tray_cb)
+
+        layout.addWidget(behavior_group)
+
+        # Buttons
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            # Save settings
+            settings.set_setting("launch_at_login", self.launch_at_login_cb.isChecked())
+            settings.set_setting("launch_minimized", self.launch_minimized_cb.isChecked())
+            settings.set_setting("minimize_to_tray", self.minimize_to_tray_cb.isChecked())
+            settings.set_setting("close_to_tray", self.close_to_tray_cb.isChecked())
+
+            # Apply autostart setting
+            settings.apply_autostart_setting()
+
+            self.status_bar.showMessage("Settings saved", 2000)
+
+    def changeEvent(self, event):
+        """Handle window state changes (minimize)."""
+        from PySide6.QtCore import QEvent
+        if event.type() == QEvent.Type.WindowStateChange:
+            if self.windowState() & Qt.WindowState.WindowMinimized:
+                if settings.get_setting("minimize_to_tray", True):
+                    # Hide window and show only in tray
+                    QTimer.singleShot(0, self.hide)
+        super().changeEvent(event)
+
     def closeEvent(self, event):
+        # Check if we should minimize to tray instead of closing
+        if settings.get_setting("close_to_tray", True) and hasattr(self, 'tray_icon'):
+            event.ignore()
+            self.hide()
+            self.tray_icon.showMessage(
+                "Thermal Engine",
+                "Application minimized to system tray. Right-click tray icon to quit.",
+                QSystemTrayIcon.MessageIcon.Information,
+                2000
+            )
+            return
+
         self.disconnect_display()
 
         if self.perf_update_timer:
