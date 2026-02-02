@@ -13,7 +13,7 @@ import psutil
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QLineEdit, QColorDialog, QFileDialog,
-    QComboBox, QSplitter, QMessageBox, QToolBar, QStatusBar, QTabWidget,
+    QComboBox, QSplitter, QMessageBox, QStatusBar, QTabWidget,
     QDialog, QCheckBox, QDialogButtonBox, QGroupBox, QFormLayout, QSystemTrayIcon
 )
 from PySide6.QtCore import Qt, QTimer
@@ -205,7 +205,6 @@ class ThemeEditorWindow(QMainWindow):
 
         self.setup_ui()
         self.setup_menu()
-        self.setup_toolbar()
         self.connect_signals()
 
         self.add_default_elements()
@@ -451,26 +450,6 @@ class ThemeEditorWindow(QMainWindow):
         settings_action = QAction("Preferences...", self)
         settings_action.triggered.connect(self.show_settings)
         settings_menu.addAction(settings_action)
-
-    def setup_toolbar(self):
-        toolbar = QToolBar("Main Toolbar")
-        self.addToolBar(toolbar)
-
-        toolbar.addAction("New", self.new_theme)
-        toolbar.addAction("Open", self.open_theme)
-        toolbar.addAction("Save", self.save_theme)
-        toolbar.addSeparator()
-        self.connect_toolbar_action = toolbar.addAction("Connect", self.toggle_connection)
-        toolbar.addAction("Send (F5)", self.send_to_display)
-        toolbar.addSeparator()
-
-        toolbar.addWidget(QLabel(" FPS: "))
-        self.fps_combo = QComboBox()
-        self.fps_combo.addItems(["10", "20", "30"])
-        self.fps_combo.setCurrentText(str(self.target_fps))
-        self.fps_combo.currentTextChanged.connect(lambda t: self.set_target_fps(int(t)))
-        self.fps_combo.setFixedWidth(50)
-        toolbar.addWidget(self.fps_combo)
 
     def connect_signals(self):
         self.element_list.element_selected.connect(self.on_element_selected)
@@ -1097,7 +1076,7 @@ class ThemeEditorWindow(QMainWindow):
 
             # Update button text to "Disconnect"
             self.connect_action.setText("Disconnect")
-            self.connect_toolbar_action.setText("Disconnect")
+            self.connect_action.setText("Disconnect")
             self.send_action.setEnabled(True)
 
             psutil.cpu_percent(interval=None)
@@ -1127,7 +1106,7 @@ class ThemeEditorWindow(QMainWindow):
 
         # Update button text to "Connect"
         self.connect_action.setText("Connect")
-        self.connect_toolbar_action.setText("Connect")
+        self.connect_action.setText("Connect")
         self.send_action.setEnabled(False)
 
         self.status_bar.showMessage("Disconnected")
@@ -1136,10 +1115,6 @@ class ThemeEditorWindow(QMainWindow):
         self.target_fps = fps
         for action in self.fps_actions:
             action.setChecked(action.text() == f"{fps} FPS")
-
-        self.fps_combo.blockSignals(True)
-        self.fps_combo.setCurrentText(str(fps))
-        self.fps_combo.blockSignals(False)
 
         if self.live_preview_timer and self.live_preview_timer.isActive():
             interval = 1000 // self.target_fps
