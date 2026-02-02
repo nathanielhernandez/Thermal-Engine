@@ -13,10 +13,10 @@ if errorlevel 1 (
     pip install pyinstaller
 )
 
-:: Download DLLs if not present
-if not exist "LibreHardwareMonitorLib.dll" (
-    echo Downloading required DLLs...
-    python download_lhm.py
+:: Check for SensorHelperApp
+if not exist "lhm\SensorHelperApp.exe" (
+    echo [WARNING] lhm\SensorHelperApp.exe not found.
+    echo Sensor monitoring will not work in the built executable.
 )
 
 :: Clean previous builds
@@ -36,17 +36,8 @@ pyinstaller ^
     --icon "icon.ico" ^
     --add-data "presets;presets" ^
     --add-data "elements;elements" ^
-    --add-data "LibreHardwareMonitorLib.dll;." ^
-    --add-data "HidSharp.dll;." ^
-    --add-data "Microsoft.Win32.Registry.dll;." ^
-    --add-data "System.IO.FileSystem.AccessControl.dll;." ^
-    --add-data "System.Security.AccessControl.dll;." ^
-    --add-data "System.Security.Principal.Windows.dll;." ^
-    --hidden-import "clr_loader" ^
-    --hidden-import "pythonnet" ^
-    --hidden-import "clr" ^
+    --add-data "lhm;lhm" ^
     --hidden-import "PySide6.QtSvg" ^
-    --collect-all "clr_loader" ^
     main.py
 
 if errorlevel 1 (

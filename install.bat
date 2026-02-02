@@ -60,13 +60,13 @@ if errorlevel 1 (
 )
 echo.
 
-:: Download LibreHardwareMonitor DLLs
-echo.
-echo Downloading LibreHardwareMonitor libraries...
-python download_lhm.py
-if errorlevel 1 (
-    echo [WARNING] Failed to download hardware monitor libraries.
-    echo GPU/CPU temperature monitoring may not work.
+:: Check for SensorHelperApp
+if exist "lhm\SensorHelperApp.exe" (
+    echo [OK] SensorHelperApp found
+) else (
+    echo [WARNING] lhm\SensorHelperApp.exe not found.
+    echo CPU/GPU sensor monitoring will not work.
+    echo Please ensure the lhm folder is present with SensorHelperApp.exe
 )
 echo.
 

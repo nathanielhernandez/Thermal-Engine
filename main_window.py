@@ -44,14 +44,20 @@ _psutil_thread_running = False
 _cpu_percent_history = []
 _last_net_io = None
 _last_net_time = 0
+_psutil_last_success = 0
+_psutil_consecutive_errors = 0
 
 
 def _psutil_polling_thread():
     """Background thread that continuously polls psutil data."""
-    global _psutil_data, _psutil_thread_running, _cpu_percent_history, _last_net_io, _last_net_time
+    global _psutil_data, _psutil_thread_running, _cpu_percent_history
+    global _last_net_io, _last_net_time, _psutil_last_success, _psutil_consecutive_errors
 
     # Initialize CPU percent
-    psutil.cpu_percent(interval=None)
+    try:
+        psutil.cpu_percent(interval=None)
+    except:
+        pass
 
     while _psutil_thread_running:
         try:
@@ -92,8 +98,21 @@ def _psutil_polling_thread():
                 _psutil_data['net_upload'] = round(net_upload, 2)
                 _psutil_data['net_download'] = round(net_download, 2)
 
+            _psutil_last_success = time.time()
+            _psutil_consecutive_errors = 0
+
         except Exception as e:
-            print(f"[Psutil] Background poll error: {e}")
+            _psutil_consecutive_errors += 1
+            if _psutil_consecutive_errors <= 3:  # Only log first few errors
+                print(f"[Psutil] Background poll error: {e}")
+            # Reset state on repeated errors (might help after sleep/wake)
+            if _psutil_consecutive_errors > 10:
+                _cpu_percent_history.clear()
+                _psutil_consecutive_errors = 0
+                try:
+                    psutil.cpu_percent(interval=None)  # Re-initialize
+                except:
+                    pass
 
         # Poll every 200ms for responsive CPU readings
         time.sleep(0.2)
@@ -120,6 +139,13 @@ def stop_psutil_thread():
 
 def get_psutil_data():
     """Get psutil data from background thread cache (non-blocking)."""
+    # Check if thread is alive, restart if needed
+    global _psutil_thread
+    if _psutil_thread_running and (_psutil_thread is None or not _psutil_thread.is_alive()):
+        print("[Psutil] Thread died, restarting...")
+        _psutil_thread = threading.Thread(target=_psutil_polling_thread, daemon=True)
+        _psutil_thread.start()
+
     with _psutil_data_lock:
         return _psutil_data.copy()
 
@@ -287,6 +313,12 @@ class ThemeEditorWindow(QMainWindow):
         self.theme_name_edit.textChanged.connect(self.on_theme_name_changed)
         name_layout.addWidget(self.theme_name_edit)
 
+        self.quick_save_btn = QPushButton("Save")
+        self.quick_save_btn.setFixedWidth(60)
+        self.quick_save_btn.clicked.connect(self.quick_save)
+        self.quick_save_btn.setToolTip("Save to presets folder (Ctrl+S)")
+        name_layout.addWidget(self.quick_save_btn)
+
         name_layout.addWidget(QLabel("Background:"))
         self.bg_color_btn = QPushButton()
         self.bg_color_btn.setFixedSize(30, 25)
@@ -369,20 +401,15 @@ class ThemeEditorWindow(QMainWindow):
         open_action.triggered.connect(self.open_theme)
         file_menu.addAction(open_action)
 
-        save_action = QAction("Save Theme", self)
+        save_action = QAction("Save", self)
         save_action.setShortcut(QKeySequence.StandardKey.Save)
-        save_action.triggered.connect(self.save_theme)
+        save_action.triggered.connect(self.quick_save)
         file_menu.addAction(save_action)
 
-        save_as_action = QAction("Save Theme As...", self)
+        save_as_action = QAction("Save As...", self)
         save_as_action.setShortcut(QKeySequence.StandardKey.SaveAs)
         save_as_action.triggered.connect(self.save_theme_as)
         file_menu.addAction(save_as_action)
-
-        save_preset_action = QAction("Save as Preset", self)
-        save_preset_action.setShortcut("Ctrl+Shift+S")
-        save_preset_action.triggered.connect(self.save_as_preset)
-        file_menu.addAction(save_preset_action)
 
         file_menu.addSeparator()
 
@@ -560,7 +587,7 @@ class ThemeEditorWindow(QMainWindow):
             self.properties_panel.set_element(None)
 
     def on_canvas_element_selected(self, idx):
-        self.element_list.select_element(idx)
+        self.element_list.select_element(idx, emit_signals=False)
         if idx >= 0 and idx < len(self.elements):
             self.properties_panel.set_element(self.elements[idx])
         else:
@@ -579,7 +606,7 @@ class ThemeEditorWindow(QMainWindow):
 
     def on_canvas_elements_selected(self, indices):
         """Handle multi-selection from canvas."""
-        self.element_list.select_elements(indices)
+        self.element_list.select_elements(indices, emit_signals=False)
         if len(indices) == 1:
             self.properties_panel.set_element(self.elements[indices[0]])
         elif len(indices) > 1:
@@ -714,6 +741,14 @@ class ThemeEditorWindow(QMainWindow):
             "video_background": video_background.to_dict()
         }
         self.presets_panel.save_preset(self.theme_name, theme_data)
+
+    def quick_save(self):
+        """Quick save to presets folder using current theme name."""
+        if not self.theme_name or self.theme_name.strip() == "":
+            self.status_bar.showMessage("Please enter a theme name first")
+            return
+        self.save_as_preset()
+        self.status_bar.showMessage(f"Saved: {self.theme_name}")
 
     def update_element_list_name(self):
         self.element_list.refresh_list()
@@ -1076,7 +1111,6 @@ class ThemeEditorWindow(QMainWindow):
 
             # Update button text to "Disconnect"
             self.connect_action.setText("Disconnect")
-            self.connect_action.setText("Disconnect")
             self.send_action.setEnabled(True)
 
             psutil.cpu_percent(interval=None)
@@ -1098,18 +1132,23 @@ class ThemeEditorWindow(QMainWindow):
         self.stop_continuous_send()
 
         if self.device:
-            self.device.close()
-            self.device = None
+            try:
+                self.device.close()
+            except Exception as e:
+                print(f"Error closing HID device: {e}")
+            finally:
+                self.device = None
 
         self.frame_times = []
         self.last_frame_time = 0
 
         # Update button text to "Connect"
-        self.connect_action.setText("Connect")
-        self.connect_action.setText("Connect")
-        self.send_action.setEnabled(False)
-
-        self.status_bar.showMessage("Disconnected")
+        try:
+            self.connect_action.setText("Connect")
+            self.send_action.setEnabled(False)
+            self.status_bar.showMessage("Disconnected")
+        except:
+            pass  # UI might not be available during shutdown
 
     def set_target_fps(self, fps):
         self.target_fps = fps
@@ -1167,8 +1206,15 @@ class ThemeEditorWindow(QMainWindow):
             self.record_frame_time()
 
         except Exception as e:
-            print(f"Send error: {e}")
-            self.status_bar.showMessage(f"Error: {e}")
+            error_str = str(e).lower()
+            # Check for device disconnect errors
+            if "device" in error_str or "hid" in error_str or "write" in error_str or "closed" in error_str:
+                print(f"[HID] Device error, disconnecting: {e}")
+                self.disconnect_display()
+                self.status_bar.showMessage("Display disconnected - click Connect to retry")
+            else:
+                print(f"Send error: {e}")
+                self.status_bar.showMessage(f"Error: {e}")
 
     _font_cache = None
 
@@ -1940,6 +1986,9 @@ class ThemeEditorWindow(QMainWindow):
         return buffer.getvalue()
 
     def send_jpeg_frame(self, jpeg_data):
+        if not self.device:
+            raise IOError("Device not connected")
+
         MAGIC = bytes([0xDA, 0xDB, 0xDC, 0xDD])
 
         header = bytearray(512)
@@ -1957,15 +2006,18 @@ class ThemeEditorWindow(QMainWindow):
         first_chunk = min(len(jpeg_data), 492)
         header[20:20 + first_chunk] = jpeg_data[:first_chunk]
 
-        self.device.write(bytes([0x00]) + bytes(header))
+        try:
+            self.device.write(bytes([0x00]) + bytes(header))
 
-        offset = first_chunk
-        while offset < len(jpeg_data):
-            chunk = jpeg_data[offset:offset + 512]
-            if len(chunk) < 512:
-                chunk = chunk + bytes(512 - len(chunk))
-            self.device.write(bytes([0x00]) + chunk)
-            offset += 512
+            offset = first_chunk
+            while offset < len(jpeg_data):
+                chunk = jpeg_data[offset:offset + 512]
+                if len(chunk) < 512:
+                    chunk = chunk + bytes(512 - len(chunk))
+                self.device.write(bytes([0x00]) + chunk)
+                offset += 512
+        except Exception as e:
+            raise IOError(f"HID write failed: {e}")
 
     def show_settings(self):
         """Show the settings dialog."""

@@ -293,6 +293,20 @@ class PropertiesPanel(QWidget):
         self.show_gradient_label = QLabel("")
         self.props_layout.addRow(self.show_gradient_label, self.show_gradient_check)
 
+        # Line chart options
+        self.line_thickness_spin = QSpinBox()
+        self.line_thickness_spin.setRange(1, 10)
+        self.line_thickness_spin.setValue(2)
+        self.line_thickness_spin.valueChanged.connect(self.on_property_changed)
+        self.line_thickness_label = QLabel("Line Thickness:")
+        self.props_layout.addRow(self.line_thickness_label, self.line_thickness_spin)
+
+        self.smooth_check = QCheckBox("Smooth Line")
+        self.smooth_check.setToolTip("Enable smooth curve interpolation instead of jagged lines")
+        self.smooth_check.stateChanged.connect(self.on_property_changed)
+        self.smooth_label = QLabel("")
+        self.props_layout.addRow(self.smooth_label, self.smooth_check)
+
         # Bar gauge options
         self.rounded_corners_check = QCheckBox("Rounded Corners")
         self.rounded_corners_check.stateChanged.connect(self.on_property_changed)
@@ -540,6 +554,8 @@ class PropertiesPanel(QWidget):
             return
 
         if self.current_element:
+            if self.current_element.locked:
+                return
             if not self._undo_state_saved:
                 self.property_will_change.emit()
                 self._undo_state_saved = True
@@ -608,7 +624,8 @@ class PropertiesPanel(QWidget):
                 "font": False, "font_size": True, "font_style": False,
                 "align": False, "clip": False, "source": True, "value": True, "image": False,
                 "show_background": True, "show_label": True, "show_gradient": True,
-                "rounded_corners": False, "gradient_fill": False
+                "rounded_corners": False, "gradient_fill": False,
+                "line_thickness": True, "smooth": True
             },
             "bar_gauge": {
                 "width": True, "height": True, "radius": False,
@@ -686,6 +703,12 @@ class PropertiesPanel(QWidget):
 
         self.show_gradient_label.setVisible(visibility.get("show_gradient", False))
         self.show_gradient_check.setVisible(visibility.get("show_gradient", False))
+
+        # Line chart options
+        self.line_thickness_label.setVisible(visibility.get("line_thickness", False))
+        self.line_thickness_spin.setVisible(visibility.get("line_thickness", False))
+        self.smooth_label.setVisible(visibility.get("smooth", False))
+        self.smooth_check.setVisible(visibility.get("smooth", False))
 
         # Bar gauge options
         self.rounded_corners_label.setVisible(visibility.get("rounded_corners", False))
@@ -768,6 +791,8 @@ class PropertiesPanel(QWidget):
         self.show_background_check.blockSignals(True)
         self.show_label_check.blockSignals(True)
         self.show_gradient_check.blockSignals(True)
+        self.line_thickness_spin.blockSignals(True)
+        self.smooth_check.blockSignals(True)
         self.rounded_corners_check.blockSignals(True)
         self.gradient_fill_check.blockSignals(True)
         self.auto_color_change_check.blockSignals(True)
@@ -801,6 +826,8 @@ class PropertiesPanel(QWidget):
         self.show_background_check.setChecked(element.show_background)
         self.show_label_check.setChecked(element.show_label)
         self.show_gradient_check.setChecked(element.show_gradient)
+        self.line_thickness_spin.setValue(getattr(element, 'line_thickness', 2))
+        self.smooth_check.setChecked(getattr(element, 'smooth', False))
         self.rounded_corners_check.setChecked(element.rounded_corners)
         self.gradient_fill_check.setChecked(element.gradient_fill)
         self.auto_color_change_check.setChecked(getattr(element, 'auto_color_change', True))
@@ -889,6 +916,8 @@ class PropertiesPanel(QWidget):
         self.show_background_check.blockSignals(False)
         self.show_label_check.blockSignals(False)
         self.show_gradient_check.blockSignals(False)
+        self.line_thickness_spin.blockSignals(False)
+        self.smooth_check.blockSignals(False)
         self.rounded_corners_check.blockSignals(False)
         self.gradient_fill_check.blockSignals(False)
         self.auto_color_change_check.blockSignals(False)
@@ -910,8 +939,84 @@ class PropertiesPanel(QWidget):
         self.current_element = element
         self._undo_state_saved = False
 
+        # Enable/disable controls based on locked state
+        self.set_controls_enabled(not element.locked)
+
+    def set_controls_enabled(self, enabled):
+        """Enable or disable all property controls."""
+        # Name is always editable to allow renaming locked elements
+        # self.name_edit.setEnabled(enabled)
+
+        # Position and size
+        self.x_spin.setEnabled(enabled)
+        self.y_spin.setEnabled(enabled)
+        self.width_spin.setEnabled(enabled)
+        self.height_spin.setEnabled(enabled)
+        self.radius_spin.setEnabled(enabled)
+
+        # Colors
+        self.color_btn.setEnabled(enabled)
+        self.color_opacity_slider.setEnabled(enabled)
+        self.bg_color_btn.setEnabled(enabled)
+        self.bg_color_opacity_slider.setEnabled(enabled)
+
+        # Text properties
+        self.text_edit.setEnabled(enabled)
+        self.font_family_combo.setEnabled(enabled)
+        self.font_size_spin.setEnabled(enabled)
+        self.bold_checkbox.setEnabled(enabled)
+        self.italic_checkbox.setEnabled(enabled)
+        self.align_left_btn.setEnabled(enabled)
+        self.align_center_btn.setEnabled(enabled)
+        self.align_right_btn.setEnabled(enabled)
+        self.clip_checkbox.setEnabled(enabled)
+
+        # Source and value
+        self.source_combo.setEnabled(enabled)
+        self.value_spin.setEnabled(enabled)
+
+        # Image properties
+        self.image_path_edit.setEnabled(enabled)
+        self.image_browse_btn.setEnabled(enabled)
+        self.scale_proportionally_check.setEnabled(enabled)
+
+        # Line chart options
+        self.show_background_check.setEnabled(enabled)
+        self.show_label_check.setEnabled(enabled)
+        self.show_gradient_check.setEnabled(enabled)
+        self.line_thickness_spin.setEnabled(enabled)
+        self.smooth_check.setEnabled(enabled)
+
+        # Bar gauge options
+        self.rounded_corners_check.setEnabled(enabled)
+        self.gradient_fill_check.setEnabled(enabled)
+        self.bar_text_mode_combo.setEnabled(enabled)
+        self.bar_text_position_combo.setEnabled(enabled)
+        self.auto_color_change_check.setEnabled(enabled)
+
+        # GIF options
+        self.gif_path_edit.setEnabled(enabled)
+        self.gif_browse_btn.setEnabled(enabled)
+        self.scale_mode_combo.setEnabled(enabled)
+
+        # Digital clock time format options
+        self.time_format_combo.setEnabled(enabled)
+        self.show_am_pm_check.setEnabled(enabled)
+        self.show_seconds_check.setEnabled(enabled)
+        self.show_leading_zero_check.setEnabled(enabled)
+
+        # Analog clock options
+        self.show_seconds_hand_check.setEnabled(enabled)
+        self.show_clock_border_check.setEnabled(enabled)
+        self.clock_face_style_combo.setEnabled(enabled)
+        self.smooth_animation_check.setEnabled(enabled)
+
     def on_property_changed(self):
         if self.current_element is None:
+            return
+
+        # Don't allow changes to locked elements
+        if self.current_element.locked:
             return
 
         # Save undo state before first change
@@ -949,6 +1054,8 @@ class PropertiesPanel(QWidget):
         self.current_element.show_background = self.show_background_check.isChecked()
         self.current_element.show_label = self.show_label_check.isChecked()
         self.current_element.show_gradient = self.show_gradient_check.isChecked()
+        self.current_element.line_thickness = self.line_thickness_spin.value()
+        self.current_element.smooth = self.smooth_check.isChecked()
 
         # Bar gauge options
         self.current_element.rounded_corners = self.rounded_corners_check.isChecked()
@@ -1002,6 +1109,8 @@ class PropertiesPanel(QWidget):
     def choose_color(self):
         if self.current_element is None:
             return
+        if self.current_element.locked:
+            return
         color = QColorDialog.getColor(QColor(self.current_element.color), self)
         if color.isValid():
             self.current_element.color = color.name()
@@ -1010,6 +1119,8 @@ class PropertiesPanel(QWidget):
 
     def choose_bg_color(self):
         if self.current_element is None:
+            return
+        if self.current_element.locked:
             return
         color = QColorDialog.getColor(QColor(self.current_element.background_color), self)
         if color.isValid():
@@ -1020,6 +1131,8 @@ class PropertiesPanel(QWidget):
     def on_color_opacity_changed(self, value):
         if self.current_element is None:
             return
+        if self.current_element.locked:
+            return
         if not self._undo_state_saved:
             self.property_will_change.emit()
             self._undo_state_saved = True
@@ -1029,6 +1142,8 @@ class PropertiesPanel(QWidget):
 
     def on_bg_color_opacity_changed(self, value):
         if self.current_element is None:
+            return
+        if self.current_element.locked:
             return
         if not self._undo_state_saved:
             self.property_will_change.emit()
@@ -1153,12 +1268,17 @@ class PropertiesPanel(QWidget):
     def get_alignment_units(self):
         """
         Get alignment units - groups are treated as single units, ungrouped elements as individual units.
+        Locked elements/groups are excluded from alignment.
         Returns list of dicts: {'elements': [elements], 'bounds': (x, y, w, h)}
         """
         units = []
         grouped = {}  # group_name -> [elements]
 
         for el in self.multi_selection_elements:
+            # Skip locked elements
+            if el.locked:
+                continue
+
             if el.group:
                 if el.group not in grouped:
                     grouped[el.group] = []

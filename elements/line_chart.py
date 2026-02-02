@@ -45,6 +45,8 @@ DEFAULT_PROPS = {
     "show_background": True,
     "show_label": True,
     "show_gradient": True,
+    "line_thickness": 2,
+    "smooth": False,
 }
 
 # Store history per element (keyed by element name)
@@ -91,6 +93,62 @@ def apply_opacity(color, opacity):
     return color
 
 
+def catmull_rom_spline(points, num_interpolated=10):
+    """
+    Generate smooth curve points using Catmull-Rom spline interpolation.
+
+    Args:
+        points: List of (x, y) tuples or QPointF objects
+        num_interpolated: Number of points to interpolate between each pair
+
+    Returns:
+        List of interpolated points
+    """
+    if len(points) < 2:
+        return points
+
+    # Convert QPointF to tuples if needed
+    pts = []
+    for p in points:
+        if hasattr(p, 'x') and callable(getattr(p, 'x', None)):
+            pts.append((p.x(), p.y()))
+        elif hasattr(p, 'x'):
+            pts.append((p.x, p.y))
+        else:
+            pts.append(p)
+
+    # Duplicate first and last points for boundary conditions
+    pts = [pts[0]] + pts + [pts[-1]]
+
+    result = []
+
+    for i in range(1, len(pts) - 2):
+        p0, p1, p2, p3 = pts[i-1], pts[i], pts[i+1], pts[i+2]
+
+        for t_idx in range(num_interpolated):
+            t = t_idx / num_interpolated
+            t2 = t * t
+            t3 = t2 * t
+
+            # Catmull-Rom basis functions
+            x = 0.5 * ((2 * p1[0]) +
+                      (-p0[0] + p2[0]) * t +
+                      (2*p0[0] - 5*p1[0] + 4*p2[0] - p3[0]) * t2 +
+                      (-p0[0] + 3*p1[0] - 3*p2[0] + p3[0]) * t3)
+
+            y = 0.5 * ((2 * p1[1]) +
+                      (-p0[1] + p2[1]) * t +
+                      (2*p0[1] - 5*p1[1] + 4*p2[1] - p3[1]) * t2 +
+                      (-p0[1] + 3*p1[1] - 3*p2[1] + p3[1]) * t3)
+
+            result.append((x, y))
+
+    # Add the last point
+    result.append(pts[-2])
+
+    return result
+
+
 def draw_preview(painter, element, x, y, scale):
     """Draw the chart in the Qt preview canvas."""
     width = int(element.width * scale)
@@ -107,6 +165,8 @@ def draw_preview(painter, element, x, y, scale):
     show_background = getattr(element, 'show_background', True)
     show_label = getattr(element, 'show_label', True)
     show_gradient = getattr(element, 'show_gradient', True)
+    line_thickness = getattr(element, 'line_thickness', 2)
+    smooth = getattr(element, 'smooth', False)
 
     # Draw background
     if show_background:
@@ -139,20 +199,27 @@ def draw_preview(painter, element, x, y, scale):
 
     # Create path for the line
     if len(points) >= 2:
+        # Apply smoothing if enabled
+        if smooth and len(points) >= 3:
+            smooth_pts = catmull_rom_spline(points, num_interpolated=8)
+            draw_points = [QPointF(p[0], p[1]) for p in smooth_pts]
+        else:
+            draw_points = points
+
         # Build the line path
         line_path = QPainterPath()
-        line_path.moveTo(points[0])
+        line_path.moveTo(draw_points[0])
 
-        # Connect points with straight lines (simpler, more reliable)
-        for i in range(1, len(points)):
-            line_path.lineTo(points[i])
+        # Connect points
+        for i in range(1, len(draw_points)):
+            line_path.lineTo(draw_points[i])
 
         # Create fill path (closed polygon under the line)
         fill_path = QPainterPath()
-        fill_path.moveTo(points[0].x(), y + height)  # Start at bottom-left
-        for point in points:
+        fill_path.moveTo(draw_points[0].x(), y + height)  # Start at bottom-left
+        for point in draw_points:
             fill_path.lineTo(point)  # Trace the line
-        fill_path.lineTo(points[-1].x(), y + height)  # Go to bottom-right
+        fill_path.lineTo(draw_points[-1].x(), y + height)  # Go to bottom-right
         fill_path.closeSubpath()  # Close back to start
 
         # Draw gradient fill
@@ -171,7 +238,7 @@ def draw_preview(painter, element, x, y, scale):
             painter.drawPath(fill_path)
 
         # Draw the line
-        pen = QPen(color, 2 * scale)
+        pen = QPen(color, line_thickness * scale)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
         painter.setPen(pen)
@@ -179,11 +246,12 @@ def draw_preview(painter, element, x, y, scale):
         painter.drawPath(line_path)
 
         # Draw current value dot
-        if points:
-            last_point = points[-1]
+        if draw_points:
+            last_point = draw_points[-1]
+            dot_size = max(3, line_thickness + 1) * scale
             painter.setBrush(QBrush(color))
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawEllipse(last_point, 4 * scale, 4 * scale)
+            painter.drawEllipse(last_point, dot_size, dot_size)
 
     # Draw label and value
     if show_label:
@@ -225,6 +293,8 @@ def render_image(draw, img, element):
     show_background = getattr(element, 'show_background', True)
     show_label = getattr(element, 'show_label', True)
     show_gradient = getattr(element, 'show_gradient', True)
+    line_thickness = getattr(element, 'line_thickness', 2)
+    smooth = getattr(element, 'smooth', False)
 
     # Draw background with opacity
     if show_background:
@@ -265,6 +335,13 @@ def render_image(draw, img, element):
         points.append((int(px), int(py)))
 
     if len(points) >= 2:
+        # Apply smoothing if enabled
+        if smooth and len(points) >= 3:
+            draw_points = catmull_rom_spline(points, num_interpolated=8)
+            draw_points = [(int(p[0]), int(p[1])) for p in draw_points]
+        else:
+            draw_points = points
+
         # Parse color to RGB
         if color.startswith('#'):
             r = int(color[1:3], 16)
@@ -276,7 +353,7 @@ def render_image(draw, img, element):
         # Draw gradient fill
         if show_gradient:
             # Create fill polygon points (line points + bottom corners)
-            fill_points = points + [(points[-1][0], y + height), (points[0][0], y + height)]
+            fill_points = draw_points + [(draw_points[-1][0], y + height), (draw_points[0][0], y + height)]
 
             # Create RGBA overlay for gradient effect
             overlay = PILImage.new('RGBA', img.size, (0, 0, 0, 0))
@@ -297,15 +374,18 @@ def render_image(draw, img, element):
             # Redraw on fresh draw context after paste
             draw = ImageDraw.Draw(img)
 
+        # Calculate dot size based on line thickness
+        dot_size = max(3, line_thickness + 1)
+
         # Draw the line segments with opacity
         if color_opacity < 100:
             overlay = PILImage.new('RGBA', img.size, (0, 0, 0, 0))
             overlay_draw = ImageDraw.Draw(overlay)
             line_color = (r, g, b, int(255 * color_opacity / 100))
-            for i in range(len(points) - 1):
-                overlay_draw.line([points[i], points[i + 1]], fill=line_color, width=2)
-            last_x, last_y = points[-1]
-            overlay_draw.ellipse([last_x - 4, last_y - 4, last_x + 4, last_y + 4], fill=line_color)
+            for i in range(len(draw_points) - 1):
+                overlay_draw.line([draw_points[i], draw_points[i + 1]], fill=line_color, width=line_thickness)
+            last_x, last_y = draw_points[-1]
+            overlay_draw.ellipse([last_x - dot_size, last_y - dot_size, last_x + dot_size, last_y + dot_size], fill=line_color)
             if img.mode == 'RGBA':
                 img.alpha_composite(overlay)
             else:
@@ -315,11 +395,11 @@ def render_image(draw, img, element):
             draw = ImageDraw.Draw(img)
         else:
             # Draw the line segments
-            for i in range(len(points) - 1):
-                draw.line([points[i], points[i + 1]], fill=color, width=2)
+            for i in range(len(draw_points) - 1):
+                draw.line([draw_points[i], draw_points[i + 1]], fill=color, width=line_thickness)
             # Draw current value dot
-            last_x, last_y = points[-1]
-            draw.ellipse([last_x - 4, last_y - 4, last_x + 4, last_y + 4], fill=color)
+            last_x, last_y = draw_points[-1]
+            draw.ellipse([last_x - dot_size, last_y - dot_size, last_x + dot_size, last_y + dot_size], fill=color)
 
     # Draw label
     if show_label:

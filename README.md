@@ -8,6 +8,7 @@ A visual theme editor for **LCD AIO cooler displays** (1280x480). Create custom 
 
 - **Visual drag-and-drop editor** with live preview
 - **Real-time sensor data**: CPU/GPU temperature, load, clock speed, power
+- **Auto-recovery**: Sensors automatically reconnect after sleep/wake
 - **Element types**:
   - Circle gauges with auto-color thresholds
   - Bar gauges with rounded corners and gradient fill
@@ -19,8 +20,9 @@ A visual theme editor for **LCD AIO cooler displays** (1280x480). Create custom 
 - **Video backgrounds** with fit modes
 - **Preset system** for saving and loading themes
 - **Multi-select** with alignment tools
+- **Element grouping** for organizing complex themes
 - **Undo/Redo** support
-- **Performance optimized** with background sensor polling
+- **System tray** support with minimize-to-tray
 
 ## Supported Displays
 
@@ -32,6 +34,18 @@ A visual theme editor for **LCD AIO cooler displays** (1280x480). Create custom 
 - Windows 10/11
 - Python 3.10 or later
 - Administrator rights (for hardware sensor access)
+
+### Hardware Sensor Support
+
+This application uses [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) via a helper process (`SensorHelperApp.exe`) to read hardware sensors. Supported hardware includes:
+
+- **CPUs**: Intel Core (all generations), AMD Ryzen (including Zen 4/5)
+- **GPUs**: NVIDIA GeForce, AMD Radeon (discrete GPUs prioritized over integrated)
+
+**Important notes:**
+
+1. **Run as Administrator** - Hardware sensor access requires admin privileges. Without it, sensor values may show as 0.
+2. **Antivirus software** - Some antivirus programs may flag the sensor helper. You may need to add the `lhm/` folder to your antivirus exclusions.
 
 ## Installation
 
@@ -60,12 +74,7 @@ A visual theme editor for **LCD AIO cooler displays** (1280x480). Create custom 
    pip install -r requirements.txt
    ```
 
-2. Download LibreHardwareMonitor libraries:
-   ```bash
-   python download_lhm.py
-   ```
-
-3. Run the editor:
+2. Run the editor (as Administrator):
    ```bash
    python main.py
    ```
@@ -84,7 +93,7 @@ A visual theme editor for **LCD AIO cooler displays** (1280x480). Create custom 
 2. **Drag elements** on the canvas to position them
 3. **Resize** using corner handles
 4. **Configure properties** in the Properties panel (right side)
-5. **Save as preset** via File → Save as Preset
+5. **Save as preset** via File > Save as Preset
 
 ### Keyboard Shortcuts
 
@@ -96,7 +105,9 @@ A visual theme editor for **LCD AIO cooler displays** (1280x480). Create custom 
 | Ctrl+Shift+S | Save as preset |
 | Ctrl+Z | Undo |
 | Ctrl+Y | Redo |
-| F5 | Send to display |
+| Ctrl+G | Group selected elements |
+| Ctrl+Shift+G | Ungroup |
+| Delete | Delete selected |
 | Ctrl+Click | Multi-select elements |
 
 ### Sensor Sources
@@ -104,12 +115,13 @@ A visual theme editor for **LCD AIO cooler displays** (1280x480). Create custom 
 | Source | Description |
 |--------|-------------|
 | `cpu_percent` | CPU usage (%) |
-| `cpu_temp` | CPU temperature (°C) |
+| `cpu_temp` | CPU temperature (C) |
 | `cpu_clock` | CPU clock speed (MHz) |
 | `cpu_power` | CPU power draw (W) |
 | `gpu_percent` | GPU usage (%) |
-| `gpu_temp` | GPU temperature (°C) |
+| `gpu_temp` | GPU temperature (C) |
 | `gpu_clock` | GPU clock speed (MHz) |
+| `gpu_memory_clock` | GPU memory clock (MHz) |
 | `gpu_power` | GPU power draw (W) |
 | `ram_percent` | RAM usage (%) |
 | `net_upload` | Network upload (MB/s) |
@@ -123,9 +135,14 @@ A visual theme editor for **LCD AIO cooler displays** (1280x480). Create custom 
 - Restart the editor
 
 ### Sensors showing 0
-- Run as Administrator
-- Go to Display → Diagnose Sensors to check status
-- Ensure LibreHardwareMonitor DLLs are present (run `python download_lhm.py`)
+- **Run as Administrator** - This is the most common cause
+- Check that the `lhm/` folder exists and contains `SensorHelperApp.exe`
+- Add the `lhm/` folder to your antivirus exclusions if sensors still don't work
+- Go to Display > Diagnose Sensors to check sensor status
+
+### Sensors stop working after sleep
+- The application automatically recovers sensors after sleep/wake
+- If sensors don't recover, restart the application
 
 ### Low FPS / Performance issues
 - Reduce target FPS (10 FPS is usually sufficient)
@@ -143,14 +160,29 @@ ThermalEngine/
 ├── element_list.py      # Element list panel
 ├── presets.py           # Preset management
 ├── element.py           # Theme element data model
-├── sensors.py           # Hardware sensor polling
+├── sensors.py           # Hardware sensor polling (with auto-recovery)
 ├── video_background.py  # Video background support
 ├── constants.py         # Configuration constants
-├── download_lhm.py      # DLL downloader
+├── lhm/                 # LibreHardwareMonitor + SensorHelperApp
+│   ├── SensorHelperApp.exe  # Sensor helper process
+│   └── LibreHardwareMonitorLib.dll
+├── SensorHelperApp/     # Sensor helper source code
+│   ├── Program.cs
+│   └── SensorHelperApp.csproj
 ├── elements/            # Custom element plugins
 │   ├── line_chart.py
 │   └── gif.py
 └── presets/             # Saved presets
+```
+
+## Building SensorHelperApp
+
+If you need to rebuild the sensor helper (requires .NET SDK):
+
+```bash
+cd SensorHelperApp
+dotnet build -c Release
+copy bin\Release\net10.0-windows\SensorHelperApp.exe ..\lhm\
 ```
 
 ## Custom Elements

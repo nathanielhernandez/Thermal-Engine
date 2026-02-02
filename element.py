@@ -33,6 +33,8 @@ class ThemeElement:
         self.show_background = kwargs.get("show_background", True)
         self.show_label = kwargs.get("show_label", True)
         self.show_gradient = kwargs.get("show_gradient", True)
+        self.line_thickness = kwargs.get("line_thickness", 2)
+        self.smooth = kwargs.get("smooth", False)
 
         # Bar gauge options
         self.rounded_corners = kwargs.get("rounded_corners", False)
@@ -62,6 +64,9 @@ class ThemeElement:
         # Grouping
         self.group = kwargs.get("group", None)  # Group name, None if ungrouped
 
+        # Locking
+        self.locked = kwargs.get("locked", False)  # Prevent editing/dragging when True
+
     def to_dict(self):
         return {
             "type": self.type,
@@ -90,6 +95,8 @@ class ThemeElement:
             "show_background": self.show_background,
             "show_label": self.show_label,
             "show_gradient": self.show_gradient,
+            "line_thickness": self.line_thickness,
+            "smooth": self.smooth,
             "rounded_corners": self.rounded_corners,
             "gradient_fill": self.gradient_fill,
             "bar_text_mode": self.bar_text_mode,
@@ -105,7 +112,8 @@ class ThemeElement:
             "show_clock_border": self.show_clock_border,
             "clock_face_style": self.clock_face_style,
             "smooth_animation": self.smooth_animation,
-            "group": self.group
+            "group": self.group,
+            "locked": self.locked
         }
 
     @classmethod

@@ -38,11 +38,13 @@ env/
 *.swo
 *~
 
-# DLLs - downloaded by install script
-*.dll
-
 # Local config
 .ai/
+.claude/
+
+# SensorHelperApp build artifacts (source tracked, build output ignored)
+SensorHelperApp/bin/
+SensorHelperApp/obj/
 
 # OS files
 .DS_Store

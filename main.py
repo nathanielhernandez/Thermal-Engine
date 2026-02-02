@@ -9,6 +9,8 @@ import sys
 import os
 import ctypes
 import argparse
+import atexit
+import signal
 
 from PySide6.QtWidgets import QApplication, QMessageBox, QSystemTrayIcon, QMenu
 from PySide6.QtGui import QColor, QIcon, QPixmap, QPainter, QBrush
@@ -99,6 +101,24 @@ def main():
 
     # Create main window
     window = ThemeEditorWindow()
+
+    # Register cleanup handlers to ensure HID device is released on any exit
+    def cleanup_on_exit():
+        try:
+            window.cleanup()
+        except:
+            pass
+
+    atexit.register(cleanup_on_exit)
+    app.aboutToQuit.connect(cleanup_on_exit)
+
+    # Handle Ctrl+C and termination signals
+    def signal_handler(signum, frame):
+        cleanup_on_exit()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
 
     # Create system tray icon
     tray_icon = QSystemTrayIcon(create_tray_icon(), app)

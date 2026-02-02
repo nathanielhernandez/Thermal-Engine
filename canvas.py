@@ -124,10 +124,10 @@ class CanvasPreview(QWidget):
         painter.setPen(QPen(QColor(60, 60, 80), 2))
         painter.drawRect(self.rect().adjusted(1, 1, -1, -1))
 
-        # Render in reverse order so elements at top of list appear in front
+        # Draw elements in reverse: last in list drawn first (back), first in list drawn last (front)
+        # Tree shows first element at top, so top of tree = front of display
         for i in range(len(self.elements) - 1, -1, -1):
-            element = self.elements[i]
-            self.draw_element(painter, element, i in self.selected_indices)
+            self.draw_element(painter, self.elements[i], i in self.selected_indices)
 
         # Draw combined selection box if multiple elements selected
         if len(self.selected_indices) > 1:
@@ -139,7 +139,9 @@ class CanvasPreview(QWidget):
         x = int(element.x * self.scale)
         y = int(element.y * self.scale)
 
-        if element.clip and element.type in ["text", "clock"]:
+        # Only apply clipping for text/clock elements that have clip enabled
+        needs_clip = element.clip and element.type in ["text", "clock"]
+        if needs_clip:
             clip_rect = QRectF(x, y, element.width * self.scale, element.height * self.scale)
             painter.setClipRect(clip_rect)
 
@@ -166,7 +168,7 @@ class CanvasPreview(QWidget):
                 except Exception as e:
                     print(f"Custom element draw error: {e}")
 
-        if element.clip:
+        if needs_clip:
             painter.setClipping(False)
 
         if selected:
@@ -660,7 +662,10 @@ class CanvasPreview(QWidget):
             shift_held = modifiers & Qt.KeyboardModifier.ShiftModifier
 
             # Check if clicking on resize handle of selected element(s)
-            if len(self.selected_indices) > 1:
+            # Don't allow resizing if any selected element is locked
+            any_locked = any(self.elements[idx].locked for idx in self.selected_indices) if self.selected_indices else False
+
+            if len(self.selected_indices) > 1 and not any_locked:
                 # Multi-selection resize handle check
                 handle = self.get_multi_handle_at(pos)
                 if handle != self.HANDLE_NONE:
@@ -678,7 +683,7 @@ class CanvasPreview(QWidget):
                         else:
                             self.resize_start_elements[idx] = (el.x, el.y, el.width, el.height)
                     return
-            elif len(self.selected_indices) == 1:
+            elif len(self.selected_indices) == 1 and not any_locked:
                 element = self.elements[self.selected_indices[0]]
                 handle = self.get_handle_at(pos, element)
                 if handle != self.HANDLE_NONE:
@@ -716,15 +721,19 @@ class CanvasPreview(QWidget):
                     if index not in self.selected_indices:
                         self.selected_indices = [index]
 
-                # Start dragging
-                self.drag_started.emit()
-                self.dragging = True
-                # Store start positions for all selected elements
-                self.drag_start_positions = {}
-                for idx in self.selected_indices:
-                    el = self.elements[idx]
-                    self.drag_start_positions[idx] = (el.x, el.y)
-                self.drag_start_mouse = pos
+                # Check if any selected element is locked - don't allow dragging
+                any_locked = any(self.elements[idx].locked for idx in self.selected_indices)
+
+                # Start dragging (only if not locked)
+                if not any_locked:
+                    self.drag_started.emit()
+                    self.dragging = True
+                    # Store start positions for all selected elements
+                    self.drag_start_positions = {}
+                    for idx in self.selected_indices:
+                        el = self.elements[idx]
+                        self.drag_start_positions[idx] = (el.x, el.y)
+                    self.drag_start_mouse = pos
 
                 # Emit signals
                 if len(self.selected_indices) == 1:
