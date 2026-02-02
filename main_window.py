@@ -211,6 +211,9 @@ class ThemeEditorWindow(QMainWindow):
         self.add_default_elements()
         self.setup_performance_monitor()
 
+        # Load default preset if one is set
+        self.load_default_preset_on_startup()
+
         # Auto-connect to display after window is shown
         QTimer.singleShot(500, self.auto_connect)
 
@@ -220,6 +223,33 @@ class ThemeEditorWindow(QMainWindow):
             self.status_bar.showMessage("Auto-connected to display")
         else:
             self.status_bar.showMessage("Display not found - click Connect when ready")
+
+    def load_default_preset_on_startup(self):
+        """Load the default preset if one is configured."""
+        default_preset_data = self.presets_panel.get_default_preset_data()
+        if default_preset_data:
+            # Load without saving undo state (it's startup)
+            self.theme_name = default_preset_data.get("name", "Untitled")
+            self.theme_name_edit.setText(self.theme_name)
+            self.background_color = default_preset_data.get("background_color", "#0f0f19")
+            self.bg_color_btn.setStyleSheet(f"background-color: {self.background_color};")
+            self.canvas.set_background_color(self.background_color)
+
+            self.elements = [
+                ThemeElement.from_dict(e) for e in default_preset_data.get("elements", [])
+            ]
+            self.element_list.set_elements(self.elements)
+            self.canvas.set_elements(self.elements)
+
+            # Load video background settings if present
+            video_data = default_preset_data.get("video_background", {})
+            if video_data:
+                video_background.from_dict(video_data)
+            else:
+                video_background.clear_video()
+            self._update_video_ui()
+
+            print(f"[Startup] Loaded default preset: {self.theme_name}")
 
     def setup_ui(self):
         self.setWindowTitle("Thermal Engine")

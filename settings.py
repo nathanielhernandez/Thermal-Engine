@@ -21,6 +21,7 @@ DEFAULT_SETTINGS = {
     "minimize_to_tray": True,
     "close_to_tray": True,
     "target_fps": 10,
+    "default_preset": None,  # Name of preset to load on startup
 }
 
 _settings = None

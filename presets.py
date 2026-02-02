@@ -17,6 +17,7 @@ from constants import DISPLAY_WIDTH, DISPLAY_HEIGHT
 from element import ThemeElement
 from app_path import get_resource_path
 from security import validate_preset_schema, is_safe_filename, sanitize_preset_name
+from settings import get_setting, set_setting
 
 
 # Default theme elements (same as main_window.py)
@@ -42,15 +43,20 @@ class PresetThumbnail(QWidget):
     """Widget that displays a small preview thumbnail of a preset."""
     clicked = Signal(str)  # Emits preset name
     delete_requested = Signal(str)  # Emits preset name for deletion
+    set_default_requested = Signal(str)  # Emits preset name to set as default
 
-    def __init__(self, preset_name, preset_data, is_builtin=False):
+    def __init__(self, preset_name, preset_data, is_builtin=False, is_default=False):
         super().__init__()
         self.preset_name = preset_name
         self.preset_data = preset_data
         self.is_builtin = is_builtin
+        self.is_default = is_default
         self.setFixedSize(150, 100)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setToolTip(f"Click to load: {preset_name}")
+        tooltip = f"Click to load: {preset_name}"
+        if is_default:
+            tooltip += " (Default)"
+        self.setToolTip(tooltip)
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -102,10 +108,19 @@ class PresetThumbnail(QWidget):
 
         painter.drawText(5, self.height() - 5, display_name)
 
+        # Draw indicators on the right side
+        indicator_x = self.width() - 15
+
+        # Draw checkmark for default preset
+        if self.is_default:
+            painter.setPen(QPen(QColor(0, 255, 150)))
+            painter.drawText(indicator_x, self.height() - 5, "✓")
+            indicator_x -= 15
+
         # Draw star for built-in presets
         if self.is_builtin:
             painter.setPen(QPen(QColor(255, 200, 0)))
-            painter.drawText(self.width() - 15, self.height() - 5, "★")
+            painter.drawText(indicator_x, self.height() - 5, "★")
 
         painter.end()
 
@@ -114,18 +129,33 @@ class PresetThumbnail(QWidget):
             self.clicked.emit(self.preset_name)
 
     def contextMenuEvent(self, event):
+        from PySide6.QtWidgets import QMenu
+        menu = QMenu(self)
+
+        # Set as default option (available for all presets)
+        if self.is_default:
+            default_action = menu.addAction("✓ Default Preset")
+            default_action.setEnabled(False)
+        else:
+            default_action = menu.addAction("Set as Default")
+
+        # Delete option (only for non-builtin)
+        delete_action = None
         if not self.is_builtin:
-            from PySide6.QtWidgets import QMenu
-            menu = QMenu(self)
+            menu.addSeparator()
             delete_action = menu.addAction("Delete Preset")
-            action = menu.exec(event.globalPos())
-            if action == delete_action:
-                self.delete_requested.emit(self.preset_name)
+
+        action = menu.exec(event.globalPos())
+        if action == default_action and not self.is_default:
+            self.set_default_requested.emit(self.preset_name)
+        elif action == delete_action:
+            self.delete_requested.emit(self.preset_name)
 
 
 class PresetsPanel(QWidget):
     preset_selected = Signal(dict)  # Emits preset data when selected
     preset_saved = Signal(str)  # Emits preset name when saved
+    default_changed = Signal(str)  # Emits preset name when default is changed
 
     PRESETS_PER_PAGE = 8
 
@@ -248,16 +278,21 @@ class PresetsPanel(QWidget):
         end_idx = start_idx + self.PRESETS_PER_PAGE
         page_presets = preset_names[start_idx:end_idx]
 
+        # Get the default preset name
+        default_preset = get_setting("default_preset", None)
+
         # Create thumbnails in a 2-column grid
         for i, name in enumerate(page_presets):
             preset_info = self.presets[name]
             thumbnail = PresetThumbnail(
                 name,
                 preset_info["data"],
-                preset_info.get("builtin", False)
+                preset_info.get("builtin", False),
+                is_default=(name == default_preset)
             )
             thumbnail.clicked.connect(self.on_preset_clicked)
             thumbnail.delete_requested.connect(self.on_delete_preset)
+            thumbnail.set_default_requested.connect(self.on_set_default_preset)
             row = i // 2
             col = i % 2
             self.grid_layout.addWidget(thumbnail, row, col)
@@ -307,7 +342,26 @@ class PresetsPanel(QWidget):
                         QMessageBox.warning(self, "Error", f"Failed to delete preset file: {e}")
                         return
                 del self.presets[preset_name]
+
+                # Clear default if deleted preset was the default
+                if get_setting("default_preset") == preset_name:
+                    set_setting("default_preset", None)
+
                 self.refresh_display()
+
+    def on_set_default_preset(self, preset_name):
+        """Handle setting a preset as default."""
+        if preset_name in self.presets:
+            set_setting("default_preset", preset_name)
+            self.default_changed.emit(preset_name)
+            self.refresh_display()
+
+    def get_default_preset_data(self):
+        """Get the default preset data, if one is set and exists."""
+        default_name = get_setting("default_preset", None)
+        if default_name and default_name in self.presets:
+            return self.presets[default_name]["data"]
+        return None
 
     def save_preset(self, name, theme_data):
         """Save a theme as a preset."""
