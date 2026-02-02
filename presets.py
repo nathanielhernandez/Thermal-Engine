@@ -347,14 +347,18 @@ class PresetsPanel(QWidget):
                 if get_setting("default_preset") == preset_name:
                     set_setting("default_preset", None)
 
-                self.refresh_display()
+                # Delay refresh to allow context menu to close properly
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(0, self.refresh_display)
 
     def on_set_default_preset(self, preset_name):
         """Handle setting a preset as default."""
         if preset_name in self.presets:
             set_setting("default_preset", preset_name)
             self.default_changed.emit(preset_name)
-            self.refresh_display()
+            # Delay refresh to allow context menu to close properly
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(0, self.refresh_display)
 
     def get_default_preset_data(self):
         """Get the default preset data, if one is set and exists."""
