@@ -190,7 +190,8 @@ class SensorProcess:
 
     def start(self, app_dir=None):
         if app_dir is None:
-            app_dir = os.path.dirname(os.path.abspath(__file__))
+            from app_path import get_app_dir
+            app_dir = get_app_dir()
         try:
             self.process = subprocess.Popen(
                 [sys.executable, "-c", SENSOR_HELPER_SCRIPT],

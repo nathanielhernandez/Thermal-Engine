@@ -15,6 +15,7 @@ from PySide6.QtGui import QColor, QPainter, QPen, QBrush, QFont, QPixmap
 
 from constants import DISPLAY_WIDTH, DISPLAY_HEIGHT
 from element import ThemeElement
+from app_path import get_resource_path
 
 
 # Default theme elements (same as main_window.py)
@@ -131,7 +132,7 @@ class PresetsPanel(QWidget):
         super().__init__()
         self.presets = {}
         self.current_page = 0
-        self.presets_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "presets")
+        self.presets_dir = get_resource_path("presets")
         self.setup_ui()
         self.load_presets()
 

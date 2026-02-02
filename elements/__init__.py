@@ -18,9 +18,19 @@ import sys
 CUSTOM_ELEMENTS = {}
 
 
+def get_elements_dir():
+    """Get the elements directory (works for both script and frozen exe)."""
+    if getattr(sys, 'frozen', False):
+        # Running as compiled executable
+        return os.path.join(os.path.dirname(sys.executable), 'elements')
+    else:
+        # Running as script
+        return os.path.dirname(os.path.abspath(__file__))
+
+
 def load_custom_elements():
     """Load all custom element modules from this folder."""
-    elements_dir = os.path.dirname(os.path.abspath(__file__))
+    elements_dir = get_elements_dir()
 
     for filename in os.listdir(elements_dir):
         if filename.endswith('.py') and not filename.startswith('_'):

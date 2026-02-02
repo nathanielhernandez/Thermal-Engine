@@ -6,6 +6,7 @@ Entry point for the application.
 """
 
 import sys
+import os
 import ctypes
 import argparse
 
@@ -15,6 +16,7 @@ from PySide6.QtCore import Qt
 
 from sensors import init_sensors
 from main_window import ThemeEditorWindow
+from app_path import get_app_dir
 import settings
 
 
@@ -27,7 +29,13 @@ def is_admin():
 
 
 def create_tray_icon():
-    """Create a simple tray icon."""
+    """Create tray icon from file or generate one."""
+    # Try to load icon from file
+    icon_path = os.path.join(get_app_dir(), 'icon.ico')
+    if os.path.exists(icon_path):
+        return QIcon(icon_path)
+
+    # Fallback: generate icon programmatically
     pixmap = QPixmap(32, 32)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)

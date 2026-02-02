@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QDialog, QCheckBox, QDialogButtonBox, QGroupBox, QFormLayout, QSystemTrayIcon
 )
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QColor, QAction, QKeySequence
+from PySide6.QtGui import QColor, QAction, QKeySequence, QIcon
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -152,6 +152,7 @@ from element import ThemeElement
 import sensors
 from sensors import init_sensors, get_lhm_sensors, get_lhm_sensors_sync, stop_sensors
 import settings
+from app_path import get_resource_path
 
 
 def hex_to_rgba(hex_color, opacity=100):
@@ -221,6 +222,11 @@ class ThemeEditorWindow(QMainWindow):
     def setup_ui(self):
         self.setWindowTitle("Thermal Engine")
         self.setMinimumSize(1200, 700)
+
+        # Set window icon
+        icon_path = get_resource_path("icon.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
 
         central = QWidget()
         self.setCentralWidget(central)
