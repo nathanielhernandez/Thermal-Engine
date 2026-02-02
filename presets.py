@@ -257,13 +257,10 @@ class PresetsPanel(QWidget):
         # Clear existing thumbnails properly
         while self.grid_layout.count():
             item = self.grid_layout.takeAt(0)
-            if item.widget():
-                item.widget().setParent(None)
-                item.widget().deleteLater()
-
-        # Process events to ensure widgets are removed
-        from PySide6.QtWidgets import QApplication
-        QApplication.processEvents()
+            widget = item.widget() if item else None
+            if widget:
+                widget.setParent(None)
+                widget.deleteLater()
 
         # Get sorted preset names (Default first, then alphabetical)
         preset_names = sorted(self.presets.keys(), key=lambda x: (x != "Default", x.lower()))
