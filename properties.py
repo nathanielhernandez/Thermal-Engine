@@ -350,6 +350,24 @@ class PropertiesPanel(QWidget):
         self.scale_mode_label = QLabel("Scale:")
         self.props_layout.addRow(self.scale_mode_label, self.scale_mode_combo)
 
+        # Digital clock time format options
+        self.time_format_combo = QComboBox()
+        self.time_format_combo.addItem("24-Hour (Military)", "24h")
+        self.time_format_combo.addItem("12-Hour (Standard)", "12h")
+        self.time_format_combo.currentIndexChanged.connect(self.on_property_changed)
+        self.time_format_label = QLabel("Time Format:")
+        self.props_layout.addRow(self.time_format_label, self.time_format_combo)
+
+        self.show_am_pm_check = QCheckBox("Show AM/PM")
+        self.show_am_pm_check.stateChanged.connect(self.on_property_changed)
+        self.show_am_pm_label = QLabel("")
+        self.props_layout.addRow(self.show_am_pm_label, self.show_am_pm_check)
+
+        self.show_seconds_check = QCheckBox("Show Seconds")
+        self.show_seconds_check.stateChanged.connect(self.on_property_changed)
+        self.show_seconds_label = QLabel("")
+        self.props_layout.addRow(self.show_seconds_label, self.show_seconds_check)
+
         # Analog clock options
         self.show_seconds_hand_check = QCheckBox("Show Seconds Hand")
         self.show_seconds_hand_check.stateChanged.connect(self.on_property_changed)
@@ -557,7 +575,8 @@ class PropertiesPanel(QWidget):
                 "width": True, "height": True, "radius": False,
                 "color": True, "bg_color": False, "text": False,
                 "font": True, "font_size": True, "font_style": True,
-                "align": True, "clip": True, "source": False, "value": False, "image": False
+                "align": True, "clip": True, "source": False, "value": False, "image": False,
+                "time_format": True, "show_am_pm": True, "show_seconds": True
             },
             "rectangle": {
                 "width": True, "height": True, "radius": False,
@@ -685,6 +704,14 @@ class PropertiesPanel(QWidget):
         self.bar_text_position_label.setVisible(visibility.get("bar_text_position", False))
         self.bar_text_position_combo.setVisible(visibility.get("bar_text_position", False))
 
+        # Digital clock time format options
+        self.time_format_label.setVisible(visibility.get("time_format", False))
+        self.time_format_combo.setVisible(visibility.get("time_format", False))
+        self.show_am_pm_label.setVisible(visibility.get("show_am_pm", False))
+        self.show_am_pm_check.setVisible(visibility.get("show_am_pm", False))
+        self.show_seconds_label.setVisible(visibility.get("show_seconds", False))
+        self.show_seconds_check.setVisible(visibility.get("show_seconds", False))
+
         # Analog clock options
         self.show_seconds_hand_label.setVisible(visibility.get("show_seconds_hand", False))
         self.show_seconds_hand_check.setVisible(visibility.get("show_seconds_hand", False))
@@ -743,6 +770,9 @@ class PropertiesPanel(QWidget):
         self.bg_color_opacity_slider.blockSignals(True)
         self.bar_text_mode_combo.blockSignals(True)
         self.bar_text_position_combo.blockSignals(True)
+        self.time_format_combo.blockSignals(True)
+        self.show_am_pm_check.blockSignals(True)
+        self.show_seconds_check.blockSignals(True)
         self.show_seconds_hand_check.blockSignals(True)
         self.show_clock_border_check.blockSignals(True)
         self.clock_face_style_combo.blockSignals(True)
@@ -784,6 +814,14 @@ class PropertiesPanel(QWidget):
         bar_text_position_idx = self.bar_text_position_combo.findData(bar_text_position)
         if bar_text_position_idx >= 0:
             self.bar_text_position_combo.setCurrentIndex(bar_text_position_idx)
+
+        # Digital clock time format options
+        time_format = getattr(element, 'time_format', '24h')
+        time_format_idx = self.time_format_combo.findData(time_format)
+        if time_format_idx >= 0:
+            self.time_format_combo.setCurrentIndex(time_format_idx)
+        self.show_am_pm_check.setChecked(getattr(element, 'show_am_pm', True))
+        self.show_seconds_check.setChecked(getattr(element, 'show_seconds', True))
 
         # Analog clock options
         self.show_seconds_hand_check.setChecked(getattr(element, 'show_seconds_hand', True))
@@ -851,6 +889,9 @@ class PropertiesPanel(QWidget):
         self.bg_color_opacity_slider.blockSignals(False)
         self.bar_text_mode_combo.blockSignals(False)
         self.bar_text_position_combo.blockSignals(False)
+        self.time_format_combo.blockSignals(False)
+        self.show_am_pm_check.blockSignals(False)
+        self.show_seconds_check.blockSignals(False)
         self.show_seconds_hand_check.blockSignals(False)
         self.show_clock_border_check.blockSignals(False)
         self.clock_face_style_combo.blockSignals(False)
@@ -911,6 +952,11 @@ class PropertiesPanel(QWidget):
         # GIF options
         self.current_element.gif_path = self.gif_path_edit.text()
         self.current_element.scale_mode = self.scale_mode_combo.currentData() or 'fit'
+
+        # Digital clock time format options
+        self.current_element.time_format = self.time_format_combo.currentData() or '24h'
+        self.current_element.show_am_pm = self.show_am_pm_check.isChecked()
+        self.current_element.show_seconds = self.show_seconds_check.isChecked()
 
         # Analog clock options
         self.current_element.show_seconds_hand = self.show_seconds_hand_check.isChecked()

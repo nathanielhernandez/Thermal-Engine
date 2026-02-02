@@ -47,6 +47,11 @@ class ThemeElement:
         self.gif_path = kwargs.get("gif_path", "")
         self.scale_mode = kwargs.get("scale_mode", "fit")  # fit, fill, stretch
 
+        # Clock time format options (for digital clock)
+        self.time_format = kwargs.get("time_format", "24h")  # "24h", "12h"
+        self.show_am_pm = kwargs.get("show_am_pm", True)  # Show AM/PM indicator
+        self.show_seconds = kwargs.get("show_seconds", True)  # Show seconds
+
         # Analog clock options
         self.show_seconds_hand = kwargs.get("show_seconds_hand", True)
         self.show_clock_border = kwargs.get("show_clock_border", True)
@@ -88,6 +93,9 @@ class ThemeElement:
             "auto_color_change": self.auto_color_change,
             "gif_path": self.gif_path,
             "scale_mode": self.scale_mode,
+            "time_format": self.time_format,
+            "show_am_pm": self.show_am_pm,
+            "show_seconds": self.show_seconds,
             "show_seconds_hand": self.show_seconds_hand,
             "show_clock_border": self.show_clock_border,
             "clock_face_style": self.clock_face_style,

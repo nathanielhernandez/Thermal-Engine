@@ -1316,7 +1316,19 @@ class ThemeEditorWindow(QMainWindow):
         elif element.type == "rectangle":
             self.render_rectangle_rgba(img, element, color_opacity)
         elif element.type == "clock":
-            current_time = time.strftime("%H:%M:%S")
+            # Build time format string based on element settings
+            time_format = getattr(element, 'time_format', '24h')
+            show_seconds = getattr(element, 'show_seconds', True)
+            show_am_pm = getattr(element, 'show_am_pm', True)
+
+            if time_format == '12h':
+                fmt = "%I:%M:%S" if show_seconds else "%I:%M"
+                if show_am_pm:
+                    fmt += " %p"
+            else:  # 24h
+                fmt = "%H:%M:%S" if show_seconds else "%H:%M"
+
+            current_time = time.strftime(fmt)
             temp_element = ThemeElement(
                 text=current_time, x=element.x, y=element.y,
                 font_family=element.font_family, font_size=element.font_size,

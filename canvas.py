@@ -334,7 +334,19 @@ class CanvasPreview(QWidget):
         font.setItalic(element.font_italic)
         painter.setFont(font)
 
-        current_time = time.strftime("%H:%M:%S")
+        # Build time format string based on element settings
+        time_format = getattr(element, 'time_format', '24h')
+        show_seconds = getattr(element, 'show_seconds', True)
+        show_am_pm = getattr(element, 'show_am_pm', True)
+
+        if time_format == '12h':
+            fmt = "%I:%M:%S" if show_seconds else "%I:%M"
+            if show_am_pm:
+                fmt += " %p"
+        else:  # 24h
+            fmt = "%H:%M:%S" if show_seconds else "%H:%M"
+
+        current_time = time.strftime(fmt)
 
         metrics = painter.fontMetrics()
         text_width = metrics.horizontalAdvance(current_time)
