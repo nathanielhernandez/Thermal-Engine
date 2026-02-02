@@ -711,8 +711,10 @@ class CanvasPreview(QWidget):
                         if i not in self.selected_indices:
                             self.selected_indices.append(i)
                 else:
-                    # Normal click: Single selection
-                    self.selected_indices = [index]
+                    # Normal click: If element already selected (e.g., part of group), keep selection
+                    # Otherwise, single selection
+                    if index not in self.selected_indices:
+                        self.selected_indices = [index]
 
                 # Start dragging
                 self.drag_started.emit()

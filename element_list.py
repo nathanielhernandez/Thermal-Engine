@@ -253,7 +253,7 @@ class ElementListPanel(QWidget):
 
         # Add groups first
         for group_name in sorted(groups.keys()):
-            group_item = QTreeWidgetItem([f"📁 {group_name}"])
+            group_item = QTreeWidgetItem([group_name])
             group_item.setIcon(0, self.get_group_icon())
             group_item.setData(0, Qt.ItemDataRole.UserRole, group_name)  # Store group name
             group_item.setData(0, Qt.ItemDataRole.UserRole + 1, "group")  # Mark as group
