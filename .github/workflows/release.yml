@@ -102,8 +102,13 @@ jobs:
       - name: Build SensorHelperApp
         run: |
           cd SensorHelperApp
-          # Build self-contained single-file exe (no .NET runtime needed)
-          dotnet publish -c Release -r win-x64 -o ../dist_helper
+          # Restore NuGet packages and build self-contained (no .NET runtime needed)
+          dotnet restore
+          dotnet publish -c Release -o ../dist_helper
+
+          # Debug: Show what was published
+          Write-Host "=== SensorHelperApp publish output ==="
+          Get-ChildItem "../dist_helper" | ForEach-Object { Write-Host $_.Name }
         shell: pwsh
 
       - name: Copy SensorHelper to root
@@ -121,20 +126,19 @@ jobs:
           # Create SensorHelper subfolder
           New-Item -ItemType Directory -Force -Path "dist/ThermalEngine/SensorHelper"
 
-          # Copy all SensorHelper files (self-contained .NET runtime + exe)
+          # Copy all SensorHelper files (self-contained .NET app with all dependencies)
           Copy-Item "dist_helper/*" "dist/ThermalEngine/SensorHelper/" -Recurse -Force
           Write-Host "Copied SensorHelper files to dist/ThermalEngine/SensorHelper/"
 
-          # Copy LHM DLLs to SensorHelper folder
-          if (Test-Path "lhm/LibreHardwareMonitorLib.dll") {
-            Copy-Item "lhm/LibreHardwareMonitorLib.dll" "dist/ThermalEngine/SensorHelper/" -Force
-            Copy-Item "lhm/HidSharp.dll" "dist/ThermalEngine/SensorHelper/" -Force
-            Write-Host "Copied LHM DLLs to SensorHelper folder"
-          }
-
-          # List SensorHelper contents
+          # List SensorHelper contents to verify LibreHardwareMonitorLib.dll is included
           Write-Host "=== SensorHelper folder contents ==="
           Get-ChildItem "dist/ThermalEngine/SensorHelper" | ForEach-Object { Write-Host $_.Name }
+
+          # Verify critical DLLs are present
+          if (-not (Test-Path "dist/ThermalEngine/SensorHelper/LibreHardwareMonitorLib.dll")) {
+            Write-Host "ERROR: LibreHardwareMonitorLib.dll not found in publish output!"
+            exit 1
+          }
         shell: pwsh
 
       - name: Get version from tag

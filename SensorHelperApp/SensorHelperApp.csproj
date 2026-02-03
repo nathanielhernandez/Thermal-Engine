@@ -6,13 +6,9 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="LibreHardwareMonitorLib">
-      <HintPath>..\lhm\LibreHardwareMonitorLib.dll</HintPath>
-    </Reference>
-    <Reference Include="HidSharp">
-      <HintPath>..\lhm\HidSharp.dll</HintPath>
-    </Reference>
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.3" />
   </ItemGroup>
 </Project>
