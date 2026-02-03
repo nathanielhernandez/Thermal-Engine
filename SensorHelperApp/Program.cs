@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using LibreHardwareMonitor.Hardware;
 
 class SensorHelper
@@ -7,21 +8,26 @@ class SensorHelper
 
     static void Main()
     {
-        computer = new Computer
-        {
-            IsCpuEnabled = true,
-            IsGpuEnabled = true
-        };
+        // Log errors to file for debugging
+        string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sensor_error.log");
 
         try
         {
+            computer = new Computer
+            {
+                IsCpuEnabled = true,
+                IsGpuEnabled = true
+            };
+
             computer.Open();
             Console.WriteLine("{\"status\":\"ready\"}");
             Console.Out.Flush();
         }
         catch (Exception ex)
         {
-            Console.WriteLine("{\"error\":\"" + ex.Message.Replace("\"", "'") + "\"}");
+            string errorMsg = ex.ToString();
+            try { File.WriteAllText(logPath, errorMsg); } catch { }
+            Console.WriteLine("{\"error\":\"" + ex.Message.Replace("\"", "'").Replace("\n", " ").Replace("\r", "") + "\"}");
             Console.Out.Flush();
             return;
         }
