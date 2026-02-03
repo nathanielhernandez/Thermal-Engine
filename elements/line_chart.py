@@ -259,7 +259,15 @@ def draw_preview(painter, element, x, y, scale):
         font = QFont("Arial")
         font.setPixelSize(int(element.font_size * scale))
         painter.setFont(font)
-        painter.setPen(QPen(color))
+
+        # Use custom text color if enabled
+        if getattr(element, 'use_custom_text_color', False):
+            text_color = getattr(element, 'text_color', element.color)
+            text_opacity = getattr(element, 'text_color_opacity', 100)
+            label_color = apply_opacity(text_color, text_opacity)
+        else:
+            label_color = color
+        painter.setPen(QPen(label_color))
 
         label_text = f"{element.text}: {get_value_with_unit(element.value, element.source)}"
         painter.drawText(x + 5, y + int(element.font_size * scale) + 2, label_text)
@@ -413,10 +421,18 @@ def render_image(draw, img, element):
 
         label_text = f"{element.text}: {get_value_with_unit(element.value, element.source)}"
 
-        if color_opacity < 100:
+        # Use custom text color if enabled
+        if getattr(element, 'use_custom_text_color', False):
+            text_color = getattr(element, 'text_color', color)
+            text_opacity = getattr(element, 'text_color_opacity', 100)
+        else:
+            text_color = color
+            text_opacity = color_opacity
+
+        if text_opacity < 100:
             overlay = PILImage.new('RGBA', img.size, (0, 0, 0, 0))
             overlay_draw = ImageDraw.Draw(overlay)
-            label_rgba = hex_to_rgba(color, color_opacity)
+            label_rgba = hex_to_rgba(text_color, text_opacity)
             overlay_draw.text((x + 5, y + 2), label_text, fill=label_rgba, font=font)
             if img.mode == 'RGBA':
                 img.alpha_composite(overlay)
@@ -425,4 +441,4 @@ def render_image(draw, img, element):
                 temp_img = PILImage.alpha_composite(temp_img, overlay)
                 img.paste(temp_img.convert('RGB'), (0, 0))
         else:
-            draw.text((x + 5, y + 2), label_text, fill=color, font=font)
+            draw.text((x + 5, y + 2), label_text, fill=text_color, font=font)

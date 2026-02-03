@@ -7,7 +7,7 @@ import time
 
 from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import Qt, QPointF, QRectF, Signal
-from PySide6.QtGui import QColor, QPainter, QPen, QBrush, QFont, QPixmap
+from PySide6.QtGui import QColor, QPainter, QPen, QBrush, QFont, QPixmap, QImage
 
 from constants import DISPLAY_WIDTH, DISPLAY_HEIGHT, PREVIEW_SCALE, SOURCE_UNITS
 from elements import get_custom_element
@@ -23,6 +23,49 @@ def apply_opacity(color, opacity):
     alpha = int(255 * opacity / 100)
     color.setAlpha(alpha)
     return color
+
+
+def get_text_color(element):
+    """Get the effective text color for an element, with opacity applied."""
+    if getattr(element, 'use_custom_text_color', False):
+        color = getattr(element, 'text_color', element.color)
+        opacity = getattr(element, 'text_color_opacity', 100)
+    else:
+        color = element.color
+        opacity = getattr(element, 'color_opacity', 100)
+    return apply_opacity(color, opacity)
+
+
+def interpolate_gradient_color(gradient_stops, position):
+    """Interpolate color from gradient stops at a given position (0-1)."""
+    if not gradient_stops:
+        return QColor("#00ff96")
+
+    sorted_stops = sorted(gradient_stops)
+
+    # Clamp position
+    position = max(0.0, min(1.0, position))
+
+    # Find surrounding stops
+    if position <= sorted_stops[0][0]:
+        return QColor(sorted_stops[0][1])
+    if position >= sorted_stops[-1][0]:
+        return QColor(sorted_stops[-1][1])
+
+    for i in range(len(sorted_stops) - 1):
+        p1, c1 = sorted_stops[i]
+        p2, c2 = sorted_stops[i + 1]
+        if p1 <= position <= p2:
+            # Interpolate between these two stops
+            t = (position - p1) / (p2 - p1) if p2 != p1 else 0
+            color1 = QColor(c1)
+            color2 = QColor(c2)
+            r = int(color1.red() + t * (color2.red() - color1.red()))
+            g = int(color1.green() + t * (color2.green() - color1.green()))
+            b = int(color1.blue() + t * (color2.blue() - color1.blue()))
+            return QColor(r, g, b)
+
+    return QColor(sorted_stops[-1][1])
 
 
 def get_value_with_unit(value, source):
@@ -75,12 +118,15 @@ class CanvasPreview(QWidget):
         self.scale = PREVIEW_SCALE
         self.background_color = QColor(15, 15, 25)
         self.handle_size = 10
+        self.group_selection_mode = False  # True when a complete group is selected
+        self._glass_background = None  # Cached background for glass effect
 
         self.setFixedSize(
             int(DISPLAY_WIDTH * self.scale),
             int(DISPLAY_HEIGHT * self.scale)
         )
         self.setMouseTracking(True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)  # Enable keyboard input
 
     def set_elements(self, elements):
         self.elements = elements
@@ -92,11 +138,19 @@ class CanvasPreview(QWidget):
             self.selected_indices = [index]
         else:
             self.selected_indices = []
+        self.group_selection_mode = False  # Single selection is never a group selection
         self.update()
 
-    def set_selected_indices(self, indices):
-        """Set multiple selected indices."""
+    def set_selected_indices(self, indices, group_selection=False):
+        """Set multiple selected indices.
+
+        Args:
+            indices: List of element indices to select
+            group_selection: True if this selection represents a complete group
+                             (from clicking on group in tree, not individual elements)
+        """
         self.selected_indices = list(indices)
+        self.group_selection_mode = group_selection
         self.update()
 
     def get_selected_index(self):
@@ -107,7 +161,49 @@ class CanvasPreview(QWidget):
         self.background_color = QColor(color)
         self.update()
 
+    def _has_glass_elements(self):
+        """Check if any element has glass effect enabled."""
+        return any(
+            el.type == "rectangle" and getattr(el, 'glass_effect', False)
+            for el in self.elements
+        )
+
+    def _render_background_for_glass(self):
+        """Render everything except glass effects to a buffer for blur source."""
+        buffer = QPixmap(self.size())
+        buffer.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(buffer)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Draw video background if enabled, otherwise solid color
+        if video_background.enabled:
+            pixmap = video_background.get_frame_qpixmap(self.scale)
+            if pixmap:
+                painter.drawPixmap(0, 0, pixmap)
+            else:
+                painter.fillRect(self.rect(), self.background_color)
+        else:
+            painter.fillRect(self.rect(), self.background_color)
+
+        # Draw elements without glass effect and without selection boxes
+        for i in range(len(self.elements) - 1, -1, -1):
+            element = self.elements[i]
+            # Skip glass rectangles - they'll use this buffer
+            if element.type == "rectangle" and getattr(element, 'glass_effect', False):
+                continue
+            self.draw_element(painter, element, False)
+
+        painter.end()
+        return buffer
+
     def paintEvent(self, event):
+        # If we have glass elements, pre-render the background for blur
+        if self._has_glass_elements():
+            self._glass_background = self._render_background_for_glass()
+        else:
+            self._glass_background = None
+
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -127,9 +223,14 @@ class CanvasPreview(QWidget):
         # Draw elements in reverse: last in list drawn first (back), first in list drawn last (front)
         # Tree shows first element at top, so top of tree = front of display
         for i in range(len(self.elements) - 1, -1, -1):
-            self.draw_element(painter, self.elements[i], i in self.selected_indices)
+            # In group selection mode, don't draw individual selection boxes
+            # (we'll draw only the combined box instead)
+            is_selected = i in self.selected_indices
+            draw_individual_selection = is_selected and not self.group_selection_mode
+            self.draw_element(painter, self.elements[i], draw_individual_selection)
 
-        # Draw combined selection box if multiple elements selected
+        # Draw combined selection box if multiple elements selected (always for groups,
+        # or for multi-select of individual elements)
         if len(self.selected_indices) > 1:
             self.draw_multi_selection_box(painter)
 
@@ -185,7 +286,16 @@ class CanvasPreview(QWidget):
             225 * 16, -270 * 16
         )
 
-        painter.setPen(QPen(color, int(15 * self.scale)))
+        use_gradient = getattr(element, 'gradient_fill', False)
+        if use_gradient:
+            # Get the color for current value from gradient stops
+            gradient_stops = getattr(element, 'gradient_stops', [(0.0, "#00ff96"), (1.0, "#ff4444")])
+            value_pos = element.value / 100.0
+            fill_color = interpolate_gradient_color(gradient_stops, value_pos)
+        else:
+            fill_color = color
+
+        painter.setPen(QPen(fill_color, int(15 * self.scale)))
         sweep = int(-270 * (element.value / 100) * 16)
         painter.drawArc(
             x - radius, y - radius, radius * 2, radius * 2,
@@ -205,7 +315,7 @@ class CanvasPreview(QWidget):
 
         font.setPixelSize(int(element.font_size * self.scale * 0.5))
         painter.setFont(font)
-        painter.setPen(QPen(color))
+        painter.setPen(QPen(get_text_color(element)))
         label_rect = QRectF(x - radius, y + radius / 4, radius * 2, radius / 2)
         painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter, element.text)
 
@@ -218,7 +328,7 @@ class CanvasPreview(QWidget):
         bg_color = apply_opacity(element.background_color, getattr(element, 'background_color_opacity', 100))
 
         rounded = getattr(element, 'rounded_corners', False)
-        gradient = getattr(element, 'gradient_fill', False)
+        use_gradient = getattr(element, 'gradient_fill', False)
         corner_radius = height // 2 if rounded else 0
 
         # Draw background
@@ -232,14 +342,12 @@ class CanvasPreview(QWidget):
         # Draw fill
         fill_width = int(width * element.value / 100)
         if fill_width > 0:
-            if gradient:
-                grad = QLinearGradient(x, y, x, y + height)
-                lighter_color = QColor(color)
-                lighter_color.setHsl(lighter_color.hue(), lighter_color.saturation(),
-                                      min(255, lighter_color.lightness() + 40))
-                grad.setColorAt(0, lighter_color)
-                grad.setColorAt(0.5, color)
-                grad.setColorAt(1, color.darker(120))
+            if use_gradient:
+                # Use horizontal gradient with custom stops
+                gradient_stops = getattr(element, 'gradient_stops', [(0.0, "#00ff96"), (1.0, "#ff4444")])
+                grad = QLinearGradient(x, y, x + width, y)
+                for pos, stop_color in gradient_stops:
+                    grad.setColorAt(pos, QColor(stop_color))
                 fill_brush = QBrush(grad)
             else:
                 fill_brush = QBrush(color)
@@ -256,7 +364,7 @@ class CanvasPreview(QWidget):
         bar_text_position = getattr(element, 'bar_text_position', 'inside')
 
         if bar_text_mode != 'none':
-            painter.setPen(QPen(QColor(255, 255, 255)))
+            painter.setPen(QPen(get_text_color(element)))
             font = QFont(element.font_family)
             font.setPixelSize(int(element.font_size * self.scale * 0.6))
             font.setBold(element.font_bold)
@@ -323,8 +431,74 @@ class CanvasPreview(QWidget):
         width = int(element.width * self.scale)
         height = int(element.height * self.scale)
         color = apply_opacity(element.color, getattr(element, 'color_opacity', 100))
+        border_radius = int(getattr(element, 'border_radius', 0) * self.scale)
+        glass_effect = getattr(element, 'glass_effect', False)
 
-        painter.fillRect(x, y, width, height, color)
+        if glass_effect:
+            self.draw_glass_rectangle(painter, element, x, y, width, height, border_radius, color)
+        elif border_radius > 0:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(color))
+            painter.drawRoundedRect(x, y, width, height, border_radius, border_radius)
+        else:
+            painter.fillRect(x, y, width, height, color)
+
+    def draw_glass_rectangle(self, painter, element, x, y, width, height, border_radius, color):
+        """Draw a frosted glass effect rectangle using pre-rendered background."""
+        from PySide6.QtGui import QPainterPath
+
+        glass_blur = getattr(element, 'glass_blur', 10)
+        glass_opacity = getattr(element, 'glass_opacity', 50)
+
+        # Use the pre-rendered background (no recursive grab needed)
+        if self._glass_background is not None and width > 0 and height > 0:
+            # Extract the region we need to blur
+            region = self._glass_background.copy(x, y, width, height)
+
+            # Apply blur by downscaling and upscaling (fast box blur approximation)
+            blur_amount = max(2, glass_blur // 2)
+            small = region.scaled(
+                max(1, width // blur_amount),
+                max(1, height // blur_amount),
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+            blurred = small.scaled(
+                width, height,
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+
+            # Draw the blurred background
+            if border_radius > 0:
+                path = QPainterPath()
+                path.addRoundedRect(x, y, width, height, border_radius, border_radius)
+                painter.setClipPath(path)
+                painter.drawPixmap(x, y, blurred)
+                painter.setClipping(False)
+            else:
+                painter.drawPixmap(x, y, blurred)
+
+        # Draw semi-transparent tinted overlay
+        tint_color = QColor(color)
+        tint_color.setAlpha(int(255 * glass_opacity / 100))
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(tint_color))
+
+        if border_radius > 0:
+            painter.drawRoundedRect(x, y, width, height, border_radius, border_radius)
+        else:
+            painter.fillRect(x, y, width, height, tint_color)
+
+        # Draw subtle border for glass effect
+        border_color = QColor(255, 255, 255, 40)
+        painter.setPen(QPen(border_color, 1))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        if border_radius > 0:
+            painter.drawRoundedRect(x, y, width, height, border_radius, border_radius)
+        else:
+            painter.drawRect(x, y, width, height)
 
     def draw_clock(self, painter, element, x, y, selected):
         color = apply_opacity(element.color, getattr(element, 'color_opacity', 100))
@@ -414,7 +588,8 @@ class CanvasPreview(QWidget):
         painter.drawEllipse(x - radius, y - radius, radius * 2, radius * 2)
 
         # Draw tick marks or numbers
-        painter.setPen(QPen(color, 1 * self.scale))
+        text_color = get_text_color(element)
+        painter.setPen(QPen(text_color, 1 * self.scale))
         font = QFont(getattr(element, 'font_family', 'Arial'))
         font.setPixelSize(int(getattr(element, 'font_size', 14) * self.scale * 0.8))
         painter.setFont(font)
@@ -444,9 +619,9 @@ class CanvasPreview(QWidget):
                 # Longer ticks for 12, 3, 6, 9
                 if i % 3 == 0:
                     inner_radius = radius * 0.75
-                    painter.setPen(QPen(color, 2 * self.scale))
+                    painter.setPen(QPen(text_color, 2 * self.scale))
                 else:
-                    painter.setPen(QPen(color, 1 * self.scale))
+                    painter.setPen(QPen(text_color, 1 * self.scale))
 
                 x1 = x + inner_radius * math.cos(angle_rad)
                 y1 = y + inner_radius * math.sin(angle_rad)
@@ -614,7 +789,9 @@ class CanvasPreview(QWidget):
         return self.HANDLE_NONE
 
     def get_element_at(self, pos):
-        for i in range(len(self.elements) - 1, -1, -1):
+        # Check from index 0 first (top of tree = front of display)
+        # This matches rendering order where index 0 is drawn last (on top)
+        for i in range(len(self.elements)):
             element = self.elements[i]
             x = element.x * self.scale
             y = element.y * self.scale
@@ -702,12 +879,32 @@ class CanvasPreview(QWidget):
             index = self.get_element_at(pos)
 
             if index >= 0:
+                clicked_element = self.elements[index]
+                clicked_group = getattr(clicked_element, 'group', None)
+
                 if ctrl_held:
-                    # Ctrl+click: Toggle selection
-                    if index in self.selected_indices:
-                        self.selected_indices.remove(index)
+                    # Ctrl+click: Toggle selection (respects groups)
+                    if clicked_group:
+                        # Get all indices in this group
+                        group_indices = [i for i, el in enumerate(self.elements) if getattr(el, 'group', None) == clicked_group]
+                        # Check if entire group is selected
+                        all_selected = all(i in self.selected_indices for i in group_indices)
+                        if all_selected:
+                            # Deselect entire group
+                            for i in group_indices:
+                                if i in self.selected_indices:
+                                    self.selected_indices.remove(i)
+                        else:
+                            # Select entire group
+                            for i in group_indices:
+                                if i not in self.selected_indices:
+                                    self.selected_indices.append(i)
                     else:
-                        self.selected_indices.append(index)
+                        # Ungrouped element - toggle individual
+                        if index in self.selected_indices:
+                            self.selected_indices.remove(index)
+                        else:
+                            self.selected_indices.append(index)
                 elif shift_held and self.selected_indices:
                     # Shift+click: Range selection
                     last_selected = self.selected_indices[-1]
@@ -716,10 +913,21 @@ class CanvasPreview(QWidget):
                         if i not in self.selected_indices:
                             self.selected_indices.append(i)
                 else:
-                    # Normal click: If element already selected (e.g., part of group), keep selection
-                    # Otherwise, single selection
-                    if index not in self.selected_indices:
+                    # Normal click behavior:
+                    # - If element already selected (e.g., via tree), keep current selection for dragging
+                    # - If element not selected, select entire group (or just element if ungrouped)
+                    if index in self.selected_indices:
+                        # Already selected - keep current selection (allows dragging individual from tree selection)
+                        pass
+                    elif clicked_group:
+                        # Not selected, but in a group - select entire group
+                        group_indices = [i for i, el in enumerate(self.elements) if getattr(el, 'group', None) == clicked_group]
+                        self.selected_indices = group_indices
+                        self.group_selection_mode = True
+                    else:
+                        # Ungrouped element - single selection
                         self.selected_indices = [index]
+                        self.group_selection_mode = False
 
                 # Check if any selected element is locked - don't allow dragging
                 any_locked = any(self.elements[idx].locked for idx in self.selected_indices)
@@ -900,3 +1108,45 @@ class CanvasPreview(QWidget):
             self.dragging = False
             self.resizing = False
             self.resize_handle = self.HANDLE_NONE
+
+    def keyPressEvent(self, event):
+        """Handle arrow key nudging for selected elements."""
+        if not self.selected_indices:
+            return
+
+        # Check if any selected element is locked
+        any_locked = any(self.elements[idx].locked for idx in self.selected_indices)
+        if any_locked:
+            return
+
+        key = event.key()
+        shift_held = event.modifiers() & Qt.KeyboardModifier.ShiftModifier
+
+        # Determine nudge amount: 10px with Shift, 1px without
+        nudge = 10 if shift_held else 1
+
+        dx, dy = 0, 0
+        if key == Qt.Key.Key_Left:
+            dx = -nudge
+        elif key == Qt.Key.Key_Right:
+            dx = nudge
+        elif key == Qt.Key.Key_Up:
+            dy = -nudge
+        elif key == Qt.Key.Key_Down:
+            dy = nudge
+        else:
+            # Not an arrow key, pass to parent
+            super().keyPressEvent(event)
+            return
+
+        # Emit drag_started for undo state
+        self.drag_started.emit()
+
+        # Move all selected elements
+        for idx in self.selected_indices:
+            element = self.elements[idx]
+            element.x += dx
+            element.y += dy
+            self.element_moved.emit(idx, element.x, element.y)
+
+        self.update()

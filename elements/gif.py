@@ -35,6 +35,15 @@ _gif_cache = {}
 _playback_state = {}
 
 
+def reset_all_playback():
+    """Reset all GIF playback timing after system wake or other disruption."""
+    global _playback_state
+    current_time = time.time()
+    # Reset all start times to now to prevent frame jumps
+    for key in _playback_state:
+        _playback_state[key]['start_time'] = current_time
+
+
 class GifData:
     """Stores extracted GIF data."""
     def __init__(self, path):

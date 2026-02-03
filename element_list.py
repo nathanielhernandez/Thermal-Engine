@@ -275,8 +275,23 @@ class ElementListPanel(QWidget):
         else:
             return f"{type_label} - {element.name}"
 
-    def refresh_list(self):
+    def refresh_list(self, preserve_state=True):
         """Refresh the tree widget to reflect current elements and groups."""
+        # Save current state before clearing
+        expanded_groups = set()
+        selected_indices = []
+
+        if preserve_state:
+            # Save expanded groups
+            for i in range(self.tree_widget.topLevelItemCount()):
+                item = self.tree_widget.topLevelItem(i)
+                if item.data(0, Qt.ItemDataRole.UserRole + 1) == "group":
+                    if item.isExpanded():
+                        expanded_groups.add(item.data(0, Qt.ItemDataRole.UserRole))
+
+            # Save selected element indices
+            selected_indices = self.get_selected_element_indices()
+
         self.tree_widget.blockSignals(True)
         self.tree_widget.clear()
 
@@ -349,6 +364,22 @@ class ElementListPanel(QWidget):
                     item.setForeground(0, QColor(128, 128, 128))  # Gray out locked
                 self.tree_widget.addTopLevelItem(item)
 
+        # Restore expanded state and selection
+        if preserve_state:
+            # Restore expanded groups
+            for i in range(self.tree_widget.topLevelItemCount()):
+                item = self.tree_widget.topLevelItem(i)
+                if item.data(0, Qt.ItemDataRole.UserRole + 1) == "group":
+                    group_name = item.data(0, Qt.ItemDataRole.UserRole)
+                    if group_name in expanded_groups:
+                        item.setExpanded(True)
+                    else:
+                        item.setExpanded(False)
+
+            # Restore selection
+            if selected_indices:
+                self._restore_selection(selected_indices)
+
         self.tree_widget.blockSignals(False)
 
     def get_selected_element_indices(self):
@@ -368,6 +399,18 @@ class ElementListPanel(QWidget):
                     if idx not in indices:
                         indices.append(idx)
         return sorted(indices)
+
+    def is_group_selected(self):
+        """Check if the current selection is a group selection (vs individual elements).
+
+        Returns True if a group item is selected in the tree (meaning the user
+        clicked on the group folder, not individual elements within it).
+        """
+        for item in self.tree_widget.selectedItems():
+            item_type = item.data(0, Qt.ItemDataRole.UserRole + 1)
+            if item_type == "group":
+                return True
+        return False
 
     def on_items_reordered(self):
         """Handle drag-and-drop reordering."""
@@ -822,6 +865,24 @@ class ElementListPanel(QWidget):
         if emit_signals and idx >= 0:
             self.element_selected.emit(idx)
             self.elements_selected.emit([idx])
+
+    def _restore_selection(self, indices):
+        """Restore selection without emitting signals (internal use only)."""
+        def select_matching(parent_item=None):
+            if parent_item is None:
+                count = self.tree_widget.topLevelItemCount()
+                for i in range(count):
+                    select_matching(self.tree_widget.topLevelItem(i))
+            else:
+                item_type = parent_item.data(0, Qt.ItemDataRole.UserRole + 1)
+                if item_type == "element":
+                    if parent_item.data(0, Qt.ItemDataRole.UserRole) in indices:
+                        parent_item.setSelected(True)
+                elif item_type == "group":
+                    for i in range(parent_item.childCount()):
+                        select_matching(parent_item.child(i))
+
+        select_matching()
 
     def select_elements(self, indices, emit_signals=True):
         """Select multiple elements by their indices."""

@@ -31,6 +31,8 @@
       "show_background": true,
       "show_label": true,
       "show_gradient": true,
+      "line_thickness": 2,
+      "smooth": false,
       "rounded_corners": false,
       "gradient_fill": false,
       "bar_text_mode": "full",
@@ -38,10 +40,16 @@
       "auto_color_change": true,
       "gif_path": "",
       "scale_mode": "fit",
+      "time_format": "24h",
+      "show_am_pm": true,
+      "show_seconds": true,
+      "show_leading_zero": true,
       "show_seconds_hand": true,
       "show_clock_border": false,
       "clock_face_style": "ticks",
-      "smooth_animation": true
+      "smooth_animation": true,
+      "group": null,
+      "locked": false
     }
   ],
   "video_background": {

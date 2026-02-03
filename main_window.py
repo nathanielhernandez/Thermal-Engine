@@ -10,14 +10,25 @@ import io
 import threading
 import psutil
 
+# Windows-specific imports for power event handling
+if sys.platform == 'win32':
+    import ctypes
+    import ctypes.wintypes
+
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QLineEdit, QColorDialog, QFileDialog,
     QComboBox, QSplitter, QMessageBox, QStatusBar, QTabWidget,
     QDialog, QCheckBox, QDialogButtonBox, QGroupBox, QFormLayout, QSystemTrayIcon
 )
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QByteArray
 from PySide6.QtGui import QColor, QAction, QKeySequence, QIcon
+
+# Windows power event constants
+WM_POWERBROADCAST = 0x0218
+PBT_APMRESUMEAUTOMATIC = 0x0012
+PBT_APMRESUMESUSPEND = 0x0007
+PBT_APMSUSPEND = 0x0004
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -209,7 +220,7 @@ class ThemeEditorWindow(QMainWindow):
         self.elements = []
         self.device = None
         self.live_preview_timer = None
-        self.target_fps = 10
+        self.target_fps = settings.get_setting("target_fps", 10)
 
         # Performance monitoring
         self.frame_times = []
@@ -225,6 +236,13 @@ class ThemeEditorWindow(QMainWindow):
         # Canvas update throttling (skip canvas updates during high-speed rendering)
         self._canvas_update_counter = 0
         self._canvas_update_interval = 3  # Update canvas every N frames when connected
+
+        # Sleep/wake handling - auto-reconnect
+        self._reconnect_timer = None
+        self._reconnect_attempts = 0
+        self._max_reconnect_attempts = 10
+        self._was_connected_before_sleep = False
+        self._last_wake_time = 0
 
         # Start background threads for sensor data
         start_psutil_thread()
@@ -248,6 +266,104 @@ class ThemeEditorWindow(QMainWindow):
             self.status_bar.showMessage("Auto-connected to display")
         else:
             self.status_bar.showMessage("Display not found - click Connect when ready")
+
+    def nativeEvent(self, eventType, message):
+        """Handle native Windows events for sleep/wake detection."""
+        if sys.platform == 'win32' and eventType == b"windows_generic_MSG":
+            try:
+                import ctypes
+                msg = ctypes.wintypes.MSG.from_address(int(message))
+                if msg.message == WM_POWERBROADCAST:
+                    if msg.wParam == PBT_APMSUSPEND:
+                        # System is going to sleep
+                        self._handle_system_sleep()
+                    elif msg.wParam in (PBT_APMRESUMEAUTOMATIC, PBT_APMRESUMESUSPEND):
+                        # System is waking up
+                        self._handle_system_wake()
+            except Exception as e:
+                print(f"[Power] Error handling power event: {e}")
+        return super().nativeEvent(eventType, message)
+
+    def _handle_system_sleep(self):
+        """Handle system going to sleep."""
+        print("[Power] System going to sleep")
+        self._was_connected_before_sleep = self.device is not None
+        # Stop reconnect timer if running
+        if self._reconnect_timer:
+            self._reconnect_timer.stop()
+            self._reconnect_timer = None
+
+    def _handle_system_wake(self):
+        """Handle system waking from sleep."""
+        print("[Power] System waking up")
+        self._last_wake_time = time.time()
+
+        # Reset video background timing to prevent frame jumps
+        video_background.reset_timing()
+
+        # Reset GIF playback timing
+        try:
+            from elements.gif import reset_all_playback
+            reset_all_playback()
+        except ImportError:
+            pass
+
+        # Reset frame timing for FPS calculation
+        self.frame_times = []
+        self.last_frame_time = 0
+
+        # If we were connected before sleep, try to reconnect
+        if self._was_connected_before_sleep:
+            # Disconnect cleanly first (device is likely invalid)
+            if self.device:
+                try:
+                    self.device.close()
+                except:
+                    pass
+                self.device = None
+
+            # Start reconnection attempts after a short delay
+            self._reconnect_attempts = 0
+            self._start_reconnect_timer()
+            self.status_bar.showMessage("Waking up - reconnecting to display...")
+
+    def _start_reconnect_timer(self):
+        """Start the auto-reconnect timer with exponential backoff."""
+        if self._reconnect_timer is None:
+            self._reconnect_timer = QTimer(self)
+            self._reconnect_timer.timeout.connect(self._attempt_reconnect)
+
+        # Exponential backoff: 1s, 2s, 4s, 8s... capped at 30s
+        delay = min(30000, 1000 * (2 ** self._reconnect_attempts))
+        self._reconnect_timer.start(delay)
+
+    def _attempt_reconnect(self):
+        """Attempt to reconnect to the display."""
+        self._reconnect_attempts += 1
+
+        if self._reconnect_attempts > self._max_reconnect_attempts:
+            # Give up after max attempts
+            if self._reconnect_timer:
+                self._reconnect_timer.stop()
+                self._reconnect_timer = None
+            self.status_bar.showMessage("Could not reconnect to display - click Connect to retry")
+            self._was_connected_before_sleep = False
+            return
+
+        print(f"[Power] Reconnect attempt {self._reconnect_attempts}/{self._max_reconnect_attempts}")
+
+        if self.connect_display(show_error=False):
+            # Success!
+            if self._reconnect_timer:
+                self._reconnect_timer.stop()
+                self._reconnect_timer = None
+            self._was_connected_before_sleep = False
+            self.status_bar.showMessage("Reconnected to display after wake")
+            print("[Power] Reconnected successfully")
+        else:
+            # Keep trying with backoff
+            self._start_reconnect_timer()
+            self.status_bar.showMessage(f"Reconnecting... attempt {self._reconnect_attempts}/{self._max_reconnect_attempts}")
 
     def load_default_preset_on_startup(self):
         """Load the default preset if one is configured."""
@@ -595,7 +711,9 @@ class ThemeEditorWindow(QMainWindow):
 
     def on_elements_selected(self, indices):
         """Handle multi-selection from element list."""
-        self.canvas.set_selected_indices(indices)
+        # Check if a group was selected (vs individual elements)
+        is_group = self.element_list.is_group_selected()
+        self.canvas.set_selected_indices(indices, group_selection=is_group)
         if len(indices) == 1:
             self.properties_panel.set_element(self.elements[indices[0]])
         elif len(indices) > 1:
@@ -1089,6 +1207,11 @@ class ThemeEditorWindow(QMainWindow):
     def toggle_connection(self):
         """Toggle between connected and disconnected states."""
         if self.device:
+            # User manually disconnecting - stop any auto-reconnect
+            if self._reconnect_timer:
+                self._reconnect_timer.stop()
+                self._reconnect_timer = None
+            self._was_connected_before_sleep = False
             self.disconnect_display()
         else:
             self.connect_display()
@@ -1119,6 +1242,13 @@ class ThemeEditorWindow(QMainWindow):
             self.last_frame_time = 0
 
             self.start_continuous_send()
+
+            # Stop reconnect timer if running (successful connection)
+            if self._reconnect_timer:
+                self._reconnect_timer.stop()
+                self._reconnect_timer = None
+            self._was_connected_before_sleep = False
+            self._reconnect_attempts = 0
 
             self.status_bar.showMessage("Connected to display - sending frames")
             return True
@@ -1152,6 +1282,8 @@ class ThemeEditorWindow(QMainWindow):
 
     def set_target_fps(self, fps):
         self.target_fps = fps
+        settings.set_setting("target_fps", fps)  # Persist across relaunches
+
         for action in self.fps_actions:
             action.setChecked(action.text() == f"{fps} FPS")
 
@@ -1211,7 +1343,11 @@ class ThemeEditorWindow(QMainWindow):
             if "device" in error_str or "hid" in error_str or "write" in error_str or "closed" in error_str:
                 print(f"[HID] Device error, disconnecting: {e}")
                 self.disconnect_display()
-                self.status_bar.showMessage("Display disconnected - click Connect to retry")
+                # Attempt auto-reconnect
+                self._was_connected_before_sleep = True
+                self._reconnect_attempts = 0
+                self._start_reconnect_timer()
+                self.status_bar.showMessage("Display disconnected - attempting to reconnect...")
             else:
                 print(f"Send error: {e}")
                 self.status_bar.showMessage(f"Error: {e}")
@@ -1428,22 +1564,74 @@ class ThemeEditorWindow(QMainWindow):
                     print(f"Custom element render error: {e}")
 
     def render_rectangle_rgba(self, img, element, opacity):
-        """Render a rectangle with opacity."""
-        if opacity >= 100:
+        """Render a rectangle with opacity, optional border radius, and glass effect."""
+        from PIL import ImageFilter
+
+        border_radius = getattr(element, 'border_radius', 0)
+        glass_effect = getattr(element, 'glass_effect', False)
+        coords = [element.x, element.y, element.x + element.width, element.y + element.height]
+
+        if glass_effect:
+            # Frosted glass effect
+            glass_blur = getattr(element, 'glass_blur', 10)
+            glass_opacity = getattr(element, 'glass_opacity', 50)
+
+            x, y, w, h = element.x, element.y, element.width, element.height
+
+            # Extract region to blur
+            region = img.crop((x, y, x + w, y + h))
+
+            # Apply gaussian blur
+            blurred = region.filter(ImageFilter.GaussianBlur(radius=glass_blur))
+
+            # If border radius, we need to mask the blurred region
+            if border_radius > 0:
+                # Create a mask for rounded corners
+                mask = Image.new('L', (w, h), 0)
+                mask_draw = ImageDraw.Draw(mask)
+                mask_draw.rounded_rectangle([0, 0, w, h], radius=border_radius, fill=255)
+
+                # Create a temp image and paste blurred with mask
+                temp = img.crop((x, y, x + w, y + h))
+                temp.paste(blurred, mask=mask)
+                img.paste(temp, (x, y))
+            else:
+                img.paste(blurred, (x, y))
+
+            # Draw tinted overlay
+            overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
+            overlay_draw = ImageDraw.Draw(overlay)
+            tint_rgba = hex_to_rgba(element.color, glass_opacity)
+
+            if border_radius > 0:
+                overlay_draw.rounded_rectangle(coords, radius=border_radius, fill=tint_rgba)
+            else:
+                overlay_draw.rectangle(coords, fill=tint_rgba)
+
+            # Add subtle white border
+            border_rgba = (255, 255, 255, 40)
+            if border_radius > 0:
+                overlay_draw.rounded_rectangle(coords, radius=border_radius, outline=border_rgba, width=1)
+            else:
+                overlay_draw.rectangle(coords, outline=border_rgba, width=1)
+
+            img.alpha_composite(overlay)
+
+        elif opacity >= 100:
             draw = ImageDraw.Draw(img)
-            draw.rectangle(
-                [element.x, element.y, element.x + element.width, element.y + element.height],
-                fill=element.color
-            )
+            if border_radius > 0:
+                draw.rounded_rectangle(coords, radius=border_radius, fill=element.color)
+            else:
+                draw.rectangle(coords, fill=element.color)
         else:
             # Create overlay with alpha
             overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
             overlay_draw = ImageDraw.Draw(overlay)
             rgba = hex_to_rgba(element.color, opacity)
-            overlay_draw.rectangle(
-                [element.x, element.y, element.x + element.width, element.y + element.height],
-                fill=rgba
-            )
+            if border_radius > 0:
+                overlay_draw.rounded_rectangle(coords, radius=border_radius, fill=rgba)
+            else:
+                overlay_draw.rectangle(coords, fill=rgba)
             img.alpha_composite(overlay)
 
     def render_text_rgba(self, img, element, font, opacity):
@@ -1543,31 +1731,81 @@ class ThemeEditorWindow(QMainWindow):
         else:
             draw.text((x, y), text, fill=element.color, font=font)
 
+    def interpolate_gradient_color(self, gradient_stops, position):
+        """Interpolate color from gradient stops at a given position (0-1)."""
+        if not gradient_stops:
+            return "#00ff96"
+
+        sorted_stops = sorted(gradient_stops)
+        position = max(0.0, min(1.0, position))
+
+        if position <= sorted_stops[0][0]:
+            return sorted_stops[0][1]
+        if position >= sorted_stops[-1][0]:
+            return sorted_stops[-1][1]
+
+        for i in range(len(sorted_stops) - 1):
+            p1, c1 = sorted_stops[i]
+            p2, c2 = sorted_stops[i + 1]
+            if p1 <= position <= p2:
+                t = (position - p1) / (p2 - p1) if p2 != p1 else 0
+                # Parse hex colors
+                r1, g1, b1 = int(c1[1:3], 16), int(c1[3:5], 16), int(c1[5:7], 16)
+                r2, g2, b2 = int(c2[1:3], 16), int(c2[3:5], 16), int(c2[5:7], 16)
+                r = int(r1 + t * (r2 - r1))
+                g = int(g1 + t * (g2 - g1))
+                b = int(b1 + t * (b2 - b1))
+                return f"#{r:02x}{g:02x}{b:02x}"
+
+        return sorted_stops[-1][1]
+
+    def create_horizontal_gradient(self, width, height, gradient_stops, opacity=100):
+        """Create a horizontal gradient image from gradient stops."""
+        gradient = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+
+        for px in range(width):
+            position = px / (width - 1) if width > 1 else 0
+            color = self.interpolate_gradient_color(gradient_stops, position)
+            r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
+            a = int(255 * opacity / 100)
+
+            for py in range(height):
+                gradient.putpixel((px, py), (r, g, b, a))
+
+        return gradient
+
     def render_circle_gauge_rgba(self, img, element, font, font_small, color_opacity, bg_opacity):
         """Render circle gauge with opacity support."""
         x, y = element.x, element.y
         radius = element.radius
         value = element.value
 
-        # Determine color based on value thresholds (if enabled)
-        auto_color = getattr(element, 'auto_color_change', True)
-        if auto_color:
-            if "temp" in element.source:
-                if value < 60:
-                    color = element.color
-                elif value < 80:
-                    color = "#ffcc00"
-                else:
-                    color = "#ff3232"
-            else:
-                if value < 70:
-                    color = element.color
-                elif value < 90:
-                    color = "#ffcc00"
-                else:
-                    color = "#ff3232"
+        # Check for gradient fill
+        use_gradient = getattr(element, 'gradient_fill', False)
+        if use_gradient:
+            # Interpolate color from gradient stops based on value
+            gradient_stops = getattr(element, 'gradient_stops', [(0.0, "#00ff96"), (1.0, "#ff4444")])
+            color = self.interpolate_gradient_color(gradient_stops, value / 100.0)
         else:
-            color = element.color
+            # Determine color based on value thresholds (if enabled)
+            auto_color = getattr(element, 'auto_color_change', True)
+            if auto_color:
+                if "temp" in element.source:
+                    if value < 60:
+                        color = element.color
+                    elif value < 80:
+                        color = "#ffcc00"
+                    else:
+                        color = "#ff3232"
+                else:
+                    if value < 70:
+                        color = element.color
+                    elif value < 90:
+                        color = "#ffcc00"
+                    else:
+                        color = "#ff3232"
+            else:
+                color = element.color
 
         # Create overlay for drawing with transparency
         overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
@@ -1625,17 +1863,21 @@ class ThemeEditorWindow(QMainWindow):
         value = element.value
         width, height = element.width, element.height
 
-        # Determine color based on value (if auto color enabled)
-        auto_color = getattr(element, 'auto_color_change', True)
-        if auto_color:
-            if value < 70:
-                color = element.color
-            elif value < 90:
-                color = "#ffcc00"
+        # Check for gradient fill
+        use_gradient = getattr(element, 'gradient_fill', False)
+
+        if not use_gradient:
+            # Determine color based on value (if auto color enabled)
+            auto_color = getattr(element, 'auto_color_change', True)
+            if auto_color:
+                if value < 70:
+                    color = element.color
+                elif value < 90:
+                    color = "#ffcc00"
+                else:
+                    color = "#ff3232"
             else:
-                color = "#ff3232"
-        else:
-            color = element.color
+                color = element.color
 
         rounded = getattr(element, 'rounded_corners', False)
         corner_radius = height // 2 if rounded else 0
@@ -1661,18 +1903,32 @@ class ThemeEditorWindow(QMainWindow):
         # Draw fill
         fill_width = int(width * min(value, 100) / 100)
         if fill_width > 0:
-            fill_rgba = hex_to_rgba(color, color_opacity)
-            if rounded:
-                draw.rounded_rectangle(
-                    [x, y, x + fill_width, y + height],
-                    radius=corner_radius,
-                    fill=fill_rgba
-                )
+            if use_gradient:
+                # Draw horizontal gradient using lines
+                gradient_stops = getattr(element, 'gradient_stops', [(0.0, "#00ff96"), (1.0, "#ff4444")])
+                alpha = int(255 * color_opacity / 100)
+
+                for i in range(fill_width):
+                    # Position along entire bar width (0 to 1)
+                    t = i / (width - 1) if width > 1 else 0
+                    grad_color = self.interpolate_gradient_color(gradient_stops, t)
+                    r = int(grad_color[1:3], 16)
+                    g = int(grad_color[3:5], 16)
+                    b = int(grad_color[5:7], 16)
+                    draw.line([(x + i, y), (x + i, y + height - 1)], fill=(r, g, b, alpha))
             else:
-                draw.rectangle(
-                    [x, y, x + fill_width, y + height],
-                    fill=fill_rgba
-                )
+                fill_rgba = hex_to_rgba(color, color_opacity)
+                if rounded:
+                    draw.rounded_rectangle(
+                        [x, y, x + fill_width, y + height],
+                        radius=corner_radius,
+                        fill=fill_rgba
+                    )
+                else:
+                    draw.rectangle(
+                        [x, y, x + fill_width, y + height],
+                        fill=fill_rgba
+                    )
 
         # Draw text based on bar_text_mode and bar_text_position
         bar_text_mode = getattr(element, 'bar_text_mode', 'full')
@@ -1829,24 +2085,30 @@ class ThemeEditorWindow(QMainWindow):
         radius = element.radius
         value = element.value
 
-        auto_color = getattr(element, 'auto_color_change', True)
-        if auto_color:
-            if "temp" in element.source:
-                if value < 60:
-                    color = element.color
-                elif value < 80:
-                    color = "#ffcc00"
-                else:
-                    color = "#ff3232"
-            else:
-                if value < 70:
-                    color = element.color
-                elif value < 90:
-                    color = "#ffcc00"
-                else:
-                    color = "#ff3232"
+        # Check for gradient fill
+        use_gradient = getattr(element, 'gradient_fill', False)
+        if use_gradient:
+            gradient_stops = getattr(element, 'gradient_stops', [(0.0, "#00ff96"), (1.0, "#ff4444")])
+            color = self.interpolate_gradient_color(gradient_stops, value / 100.0)
         else:
-            color = element.color
+            auto_color = getattr(element, 'auto_color_change', True)
+            if auto_color:
+                if "temp" in element.source:
+                    if value < 60:
+                        color = element.color
+                    elif value < 80:
+                        color = "#ffcc00"
+                    else:
+                        color = "#ff3232"
+                else:
+                    if value < 70:
+                        color = element.color
+                    elif value < 90:
+                        color = "#ffcc00"
+                    else:
+                        color = "#ff3232"
+            else:
+                color = element.color
 
         arc_width = 18
         for i in range(arc_width):
@@ -1889,19 +2151,21 @@ class ThemeEditorWindow(QMainWindow):
         value = element.value
         width, height = element.width, element.height
 
-        auto_color = getattr(element, 'auto_color_change', True)
-        if auto_color:
-            if value < 70:
-                color = element.color
-            elif value < 90:
-                color = "#ffcc00"
+        use_gradient = getattr(element, 'gradient_fill', False)
+
+        if not use_gradient:
+            auto_color = getattr(element, 'auto_color_change', True)
+            if auto_color:
+                if value < 70:
+                    color = element.color
+                elif value < 90:
+                    color = "#ffcc00"
+                else:
+                    color = "#ff3232"
             else:
-                color = "#ff3232"
-        else:
-            color = element.color
+                color = element.color
 
         rounded = getattr(element, 'rounded_corners', False)
-        gradient = getattr(element, 'gradient_fill', False)
         corner_radius = height // 2 if rounded else 0
 
         # Draw background
@@ -1920,23 +2184,22 @@ class ThemeEditorWindow(QMainWindow):
         # Draw fill
         fill_width = int(width * min(value, 100) / 100)
         if fill_width > 0:
-            if gradient:
-                # Parse color for gradient
-                if color.startswith('#'):
-                    r = int(color[1:3], 16)
-                    g = int(color[3:5], 16)
-                    b = int(color[5:7], 16)
-                else:
-                    r, g, b = 0, 255, 150
+            if use_gradient:
+                # Use horizontal gradient from gradient stops
+                gradient_stops = getattr(element, 'gradient_stops', [(0.0, "#00ff96"), (1.0, "#ff4444")])
 
                 # Create gradient fill using multiple thin rectangles
                 for i in range(fill_width):
-                    t = i / fill_width if fill_width > 0 else 0
-                    # Lighter at top, darker at bottom
-                    gr = min(255, int(r + (255 - r) * 0.3 * (1 - t)))
-                    gg = min(255, int(g + (255 - g) * 0.3 * (1 - t)))
-                    gb = min(255, int(b + (255 - b) * 0.3 * (1 - t)))
-                    draw.line([(x + i, y), (x + i, y + height)], fill=(gr, gg, gb))
+                    # Position along entire bar (0 to 1)
+                    t = i / (width - 1) if width > 1 else 0
+                    grad_color = self.interpolate_gradient_color(gradient_stops, t)
+
+                    # Parse interpolated color
+                    r = int(grad_color[1:3], 16)
+                    g = int(grad_color[3:5], 16)
+                    b = int(grad_color[5:7], 16)
+
+                    draw.line([(x + i, y), (x + i, y + height - 1)], fill=(r, g, b))
 
             else:
                 if rounded:
@@ -2087,6 +2350,11 @@ class ThemeEditorWindow(QMainWindow):
 
     def cleanup(self):
         """Clean up all resources before quitting."""
+        # Stop reconnect timer if running
+        if self._reconnect_timer:
+            self._reconnect_timer.stop()
+            self._reconnect_timer = None
+
         self.disconnect_display()
 
         if self.perf_update_timer:

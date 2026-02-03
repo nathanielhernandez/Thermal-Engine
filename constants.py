@@ -98,7 +98,7 @@ DEFAULT_ELEMENT_PROPS = {
     "circle_gauge": {"radius": 120, "x": 200, "y": 240, "text": "GAUGE"},
     "bar_gauge": {"width": 300, "height": 30, "x": 100, "y": 100, "text": "BAR"},
     "text": {"x": 100, "y": 100, "text": "Text Label", "font_size": 36, "width": 200, "height": 50},
-    "rectangle": {"width": 200, "height": 100, "x": 100, "y": 100},
+    "rectangle": {"width": 200, "height": 100, "x": 100, "y": 100, "border_radius": 0, "glass_effect": False, "glass_blur": 10, "glass_opacity": 50},
     "clock": {"x": 100, "y": 100, "font_size": 48, "width": 200, "height": 60},
     "analog_clock": {"radius": 100, "x": 200, "y": 240, "color": "#ffffff", "background_color": "#1a1a2e"},
     "image": {"width": 200, "height": 200, "x": 100, "y": 100}

@@ -255,6 +255,16 @@ class VideoBackground:
             if self.video_path and self._buffer_ready:
                 self.load_video(self.video_path)
 
+    def reset_timing(self):
+        """Reset playback timing after system wake or other timing disruption."""
+        with self._lock:
+            self._last_frame_time = time.time()
+            # Don't reset frame index - continue from where we were
+            # Invalidate caches
+            self._cached_pil = None
+            self._cached_pixmap = None
+            self._cached_frame_idx = -1
+
     def _advance_frame(self):
         """Advance to next frame based on elapsed time."""
         if not self._buffer_ready or self._frame_count == 0:

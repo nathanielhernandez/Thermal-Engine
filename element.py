@@ -11,10 +11,17 @@ class ThemeElement:
         self.width = kwargs.get("width", 200)
         self.height = kwargs.get("height", 50)
         self.radius = kwargs.get("radius", 100)
+        self.border_radius = kwargs.get("border_radius", 0)
+        self.glass_effect = kwargs.get("glass_effect", False)
+        self.glass_blur = kwargs.get("glass_blur", 10)
+        self.glass_opacity = kwargs.get("glass_opacity", 50)
         self.color = kwargs.get("color", "#00ff96")
         self.color_opacity = kwargs.get("color_opacity", 100)  # 0-100
         self.background_color = kwargs.get("background_color", "#1a1a2e")
         self.background_color_opacity = kwargs.get("background_color_opacity", 100)  # 0-100
+        self.use_custom_text_color = kwargs.get("use_custom_text_color", False)
+        self.text_color = kwargs.get("text_color", self.color)  # Defaults to element color
+        self.text_color_opacity = kwargs.get("text_color_opacity", 100)  # 0-100
         self.text = kwargs.get("text", "Label")
         self.font_size = kwargs.get("font_size", 32)
         self.font_family = kwargs.get("font_family", "Arial")
@@ -39,6 +46,7 @@ class ThemeElement:
         # Bar gauge options
         self.rounded_corners = kwargs.get("rounded_corners", False)
         self.gradient_fill = kwargs.get("gradient_fill", False)
+        self.gradient_stops = kwargs.get("gradient_stops", [(0.0, "#00ff96"), (1.0, "#ff4444")])  # Gradient color stops
         self.bar_text_mode = kwargs.get("bar_text_mode", "full")  # "full", "value_only", "none"
         self.bar_text_position = kwargs.get("bar_text_position", "inside")  # "inside", "left"
 
@@ -76,10 +84,17 @@ class ThemeElement:
             "width": self.width,
             "height": self.height,
             "radius": self.radius,
+            "border_radius": self.border_radius,
+            "glass_effect": self.glass_effect,
+            "glass_blur": self.glass_blur,
+            "glass_opacity": self.glass_opacity,
             "color": self.color,
             "color_opacity": self.color_opacity,
             "background_color": self.background_color,
             "background_color_opacity": self.background_color_opacity,
+            "use_custom_text_color": self.use_custom_text_color,
+            "text_color": self.text_color,
+            "text_color_opacity": self.text_color_opacity,
             "text": self.text,
             "font_size": self.font_size,
             "font_family": self.font_family,
@@ -99,6 +114,7 @@ class ThemeElement:
             "smooth": self.smooth,
             "rounded_corners": self.rounded_corners,
             "gradient_fill": self.gradient_fill,
+            "gradient_stops": self.gradient_stops,
             "bar_text_mode": self.bar_text_mode,
             "bar_text_position": self.bar_text_position,
             "auto_color_change": self.auto_color_change,
