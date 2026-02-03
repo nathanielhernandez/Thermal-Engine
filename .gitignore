@@ -60,9 +60,12 @@ nul
 # User settings
 settings.json
 
-# User themes (keep presets folder structure but not user files)
-# Uncomment below if you want to exclude user presets:
-# presets/*.json
+# User themes - only track Default and Analog Clock presets
+presets/*
+!presets/Default.json
+!presets/Default.png
+!presets/Analog Clock.json
+!presets/Analog Clock.png
 
 # Old/backup files
 *_old.py
