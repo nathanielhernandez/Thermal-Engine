@@ -1,0 +1,71 @@
+name: Build Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build SensorHelperApp
+        run: |
+          cd SensorHelperApp
+          dotnet publish -c Release -r win-x64 --self-contained false -o ../dist_helper
+        shell: pwsh
+
+      - name: Copy SensorHelper to root
+        run: |
+          if (Test-Path "dist_helper/SensorHelperApp.exe") {
+            Copy-Item "dist_helper/SensorHelperApp.exe" "." -Force
+          }
+        shell: pwsh
+
+      - name: Build with PyInstaller
+        run: pyinstaller ThermalEngine.spec
+
+      - name: Copy SensorHelper to dist
+        run: |
+          if (Test-Path "SensorHelperApp.exe") {
+            Copy-Item "SensorHelperApp.exe" "dist/ThermalEngine/" -Force
+          }
+          if (Test-Path "dist_helper/SensorHelperApp.exe") {
+            Copy-Item "dist_helper/SensorHelperApp.exe" "dist/ThermalEngine/" -Force
+          }
+        shell: pwsh
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Create ZIP archive
+        run: Compress-Archive -Path "dist/ThermalEngine/*" -DestinationPath "ThermalEngine-${{ steps.version.outputs.VERSION }}.zip"
+        shell: pwsh
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ThermalEngine-${{ steps.version.outputs.VERSION }}.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
