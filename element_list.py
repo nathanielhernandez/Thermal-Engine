@@ -491,7 +491,7 @@ class ElementListPanel(QWidget):
             group_name_map = {}
             for old_name in groups_to_duplicate:
                 base_name = old_name
-                counter = 2
+                counter = 1
                 new_name = f"{base_name} ({counter})"
                 while new_name in existing_groups or new_name in group_name_map.values():
                     counter += 1
