@@ -171,23 +171,15 @@ jobs:
         run: Compress-Archive -Path "dist/ThermalEngine/*" -DestinationPath "ThermalEngine-${{ steps.version.outputs.VERSION }}.zip"
         shell: pwsh
 
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+        shell: pwsh
+
       - name: Build Installer with Inno Setup
         run: |
-          # Download and install Inno Setup
-          $innoUrl = "https://jrsoftware.org/download.php/is.exe"
-          Invoke-WebRequest -Uri $innoUrl -OutFile "innosetup.exe"
-          Start-Process -FilePath "innosetup.exe" -Args "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-" -Wait
-
-          # Add Inno Setup to PATH
-          $innoPath = "${env:ProgramFiles(x86)}\Inno Setup 6"
-          if (-not (Test-Path $innoPath)) {
-            $innoPath = "${env:ProgramFiles}\Inno Setup 6"
-          }
-          Write-Host "Inno Setup path: $innoPath"
-
           # Build installer with version from tag
           $version = "${{ steps.version.outputs.VERSION }}"
-          & "$innoPath\ISCC.exe" "/DMyAppVersion=$version" "installer.iss"
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$version" "installer.iss"
 
           # List output files
           Write-Host "=== Installer output ==="
