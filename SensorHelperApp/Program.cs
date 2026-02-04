@@ -62,6 +62,18 @@ class SensorHelper
                     Console.Out.Flush();
                 }
             }
+            else if (line == "diag")
+            {
+                try
+                {
+                    RunDiagnostics(logPath);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("Diag error: " + ex.Message);
+                    Console.Out.Flush();
+                }
+            }
         }
 
         try { computer.Close(); } catch { }
@@ -95,6 +107,94 @@ class SensorHelper
                     Console.Out.Flush();
                 }
             }
+        }
+        Console.WriteLine("END");
+        Console.Out.Flush();
+    }
+
+    static void RunDiagnostics(string logPath)
+    {
+        var diagLines = new System.Collections.Generic.List<string>();
+        diagLines.Add("=== SensorHelper Diagnostics ===");
+        diagLines.Add("Time: " + DateTime.Now.ToString());
+        diagLines.Add("App Directory: " + AppDomain.CurrentDomain.BaseDirectory);
+        diagLines.Add("");
+
+        // Check for driver files
+        string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+        string[] driverFiles = { "WinRing0x64.sys", "WinRing0x64.dll", "WinRing0.sys", "WinRing0.dll" };
+        diagLines.Add("=== Driver Files ===");
+        foreach (var df in driverFiles)
+        {
+            string path = Path.Combine(baseDir, df);
+            diagLines.Add(df + ": " + (File.Exists(path) ? "FOUND" : "missing"));
+        }
+        diagLines.Add("");
+
+        // List all hardware and sensors
+        diagLines.Add("=== Hardware & Sensors ===");
+        bool foundCpuTemp = false;
+        bool foundCpuPower = false;
+        bool foundGpuPower = false;
+
+        foreach (var hardware in computer.Hardware)
+        {
+            hardware.Update();
+            diagLines.Add("[" + hardware.HardwareType + "] " + hardware.Name);
+
+            foreach (var sensor in hardware.Sensors)
+            {
+                string val = sensor.Value.HasValue ? sensor.Value.Value.ToString("F1") : "null";
+                diagLines.Add("  [" + sensor.SensorType + "] " + sensor.Name + " = " + val);
+
+                if (hardware.HardwareType.ToString().Contains("Cpu"))
+                {
+                    if (sensor.SensorType.ToString() == "Temperature") foundCpuTemp = true;
+                    if (sensor.SensorType.ToString() == "Power") foundCpuPower = true;
+                }
+                if (hardware.HardwareType.ToString().Contains("Gpu"))
+                {
+                    if (sensor.SensorType.ToString() == "Power") foundGpuPower = true;
+                }
+            }
+
+            foreach (var sub in hardware.SubHardware)
+            {
+                sub.Update();
+                diagLines.Add("  [SubHardware] " + sub.Name);
+                foreach (var sensor in sub.Sensors)
+                {
+                    string val = sensor.Value.HasValue ? sensor.Value.Value.ToString("F1") : "null";
+                    diagLines.Add("    [" + sensor.SensorType + "] " + sensor.Name + " = " + val);
+
+                    if (sensor.SensorType.ToString() == "Temperature") foundCpuTemp = true;
+                    if (sensor.SensorType.ToString() == "Power") foundCpuPower = true;
+                }
+            }
+        }
+
+        diagLines.Add("");
+        diagLines.Add("=== Summary ===");
+        diagLines.Add("CPU Temperature sensors: " + (foundCpuTemp ? "YES" : "NO - driver may not be loaded"));
+        diagLines.Add("CPU Power sensors: " + (foundCpuPower ? "YES" : "NO - driver may not be loaded"));
+        diagLines.Add("GPU Power sensors: " + (foundGpuPower ? "YES" : "NO"));
+
+        // Write to log file
+        string diagPath = Path.Combine(baseDir, "sensor_diag.log");
+        try
+        {
+            File.WriteAllLines(diagPath, diagLines);
+            Console.WriteLine("Diagnostics written to: " + diagPath);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Failed to write diag: " + ex.Message);
+        }
+
+        // Also output to console
+        foreach (var line in diagLines)
+        {
+            Console.WriteLine(line);
         }
         Console.WriteLine("END");
         Console.Out.Flush();

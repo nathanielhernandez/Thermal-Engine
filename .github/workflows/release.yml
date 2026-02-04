@@ -130,7 +130,28 @@ jobs:
           Copy-Item "dist_helper/*" "dist/ThermalEngine/SensorHelper/" -Recurse -Force
           Write-Host "Copied SensorHelper files to dist/ThermalEngine/SensorHelper/"
 
-          # List SensorHelper contents to verify LibreHardwareMonitorLib.dll is included
+          # Find and copy native driver files from NuGet cache or package
+          # LibreHardwareMonitor needs WinRing0 driver for CPU temps/power
+          $nugetCache = "$env:USERPROFILE\.nuget\packages\librehardwaremonitorlib"
+          Write-Host "=== Searching for native files in NuGet cache ==="
+
+          # Look for runtimes folder with native binaries
+          $nativeFiles = Get-ChildItem -Path $nugetCache -Recurse -Include "*.sys","*.dll" -ErrorAction SilentlyContinue |
+                         Where-Object { $_.FullName -like "*runtimes*" -or $_.FullName -like "*native*" }
+
+          foreach ($file in $nativeFiles) {
+            Write-Host "Found native file: $($file.FullName)"
+            Copy-Item $file.FullName -Destination "dist/ThermalEngine/SensorHelper/" -Force
+          }
+
+          # Also check the lhm_extract folder from earlier download
+          $lhmNative = Get-ChildItem -Path "lhm_extract" -Recurse -Include "*.sys" -ErrorAction SilentlyContinue
+          foreach ($file in $lhmNative) {
+            Write-Host "Found driver in lhm_extract: $($file.FullName)"
+            Copy-Item $file.FullName -Destination "dist/ThermalEngine/SensorHelper/" -Force
+          }
+
+          # List SensorHelper contents to verify
           Write-Host "=== SensorHelper folder contents ==="
           Get-ChildItem "dist/ThermalEngine/SensorHelper" | ForEach-Object { Write-Host $_.Name }
 
