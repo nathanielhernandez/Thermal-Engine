@@ -76,6 +76,10 @@ lhm_extract/
 hidsharp_extract/
 *_extract/
 *.nupkg
+lhm.zip
+hidsharp.zip
+Microsoft.*.zip
+System.*.zip
 dist_helper/
 ThermalEngine-*.zip
 ThermalEngine-*-Setup.exe

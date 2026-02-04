@@ -44,8 +44,8 @@ New-Item -ItemType Directory -Force -Path "lhm" | Out-Null
 
 # Download and extract LibreHardwareMonitor NuGet package
 if (-not (Test-Path "lhm/LibreHardwareMonitorLib.dll")) {
-    Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/LibreHardwareMonitorLib/0.9.3" -OutFile "lhm.nupkg"
-    Expand-Archive -Path "lhm.nupkg" -DestinationPath "lhm_extract" -Force
+    Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/LibreHardwareMonitorLib/0.9.3" -OutFile "lhm.zip"
+    Expand-Archive -Path "lhm.zip" -DestinationPath "lhm_extract" -Force
 
     # Find and copy LibreHardwareMonitorLib.dll
     $lhmDll = Get-ChildItem -Path "lhm_extract" -Filter "LibreHardwareMonitorLib.dll" -Recurse | Select-Object -First 1
@@ -63,8 +63,8 @@ if (-not (Test-Path "lhm/LibreHardwareMonitorLib.dll")) {
         Write-Host "  Copied HidSharp.dll"
     } else {
         Write-Host "  HidSharp not in LHM package, downloading separately..."
-        Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/HidSharp/2.1.0" -OutFile "hidsharp.nupkg"
-        Expand-Archive -Path "hidsharp.nupkg" -DestinationPath "hidsharp_extract" -Force
+        Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/HidSharp/2.1.0" -OutFile "hidsharp.zip"
+        Expand-Archive -Path "hidsharp.zip" -DestinationPath "hidsharp_extract" -Force
         $hidDll = Get-ChildItem -Path "hidsharp_extract" -Filter "HidSharp.dll" -Recurse | Select-Object -First 1
         if ($hidDll) {
             Copy-Item $hidDll.FullName -Destination "lhm/" -Force
@@ -86,7 +86,7 @@ if (-not (Test-Path "lhm/LibreHardwareMonitorLib.dll")) {
 
     foreach ($dll in $dlls) {
         $url = "https://www.nuget.org/api/v2/package/$($dll.name)/$($dll.version)"
-        $outFile = "$($dll.name).nupkg"
+        $outFile = "$($dll.name).zip"
         Invoke-WebRequest -Uri $url -OutFile $outFile
         Expand-Archive -Path $outFile -DestinationPath "$($dll.name)_extract" -Force
 
