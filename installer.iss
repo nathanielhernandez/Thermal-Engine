@@ -20,6 +20,12 @@ SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
 SetupIconFile=icon.ico
+; Update/upgrade support
+UsePreviousAppDir=yes
+CloseApplications=yes
+CloseApplicationsFilter=*.exe
+RestartApplications=yes
+UninstallDisplayIcon={app}\{#MyAppExeName}
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -28,8 +34,11 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-; Main application files
-Source: "dist\ThermalEngine\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Main application files (excluding user data folders)
+Source: "dist\ThermalEngine\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "presets\*,elements\*"
+; User data folders - only install defaults if they don't exist (preserves user customizations)
+Source: "dist\ThermalEngine\presets\*"; DestDir: "{app}\presets"; Flags: onlyifdoesntexist recursesubdirs createallsubdirs
+Source: "dist\ThermalEngine\elements\*"; DestDir: "{app}\elements"; Flags: onlyifdoesntexist recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
