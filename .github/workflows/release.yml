@@ -134,7 +134,6 @@ jobs:
             --include-package=elements `
             --include-data-dir=presets=presets `
             --include-data-files=elements/*.py=elements/ `
-            --include-data-files=elements/*.py.disabled=elements/ `
             --include-data-files=icon.ico=icon.ico `
             --include-data-files=icon.png=icon.png `
             --assume-yes-for-downloads `
