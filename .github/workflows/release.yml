@@ -135,12 +135,12 @@ jobs:
             main.py
 
           # Rename output folder to match expected structure
-          if (Test-Path "dist/main.dist") {
-            Rename-Item "dist/main.dist" "dist/ThermalEngine"
+          if (Test-Path "dist\main.dist") {
+            Move-Item -Path "dist\main.dist" -Destination "dist\ThermalEngine" -Force
           }
 
           Write-Host "=== Nuitka build output ==="
-          Get-ChildItem "dist/ThermalEngine" | ForEach-Object { Write-Host $_.Name }
+          Get-ChildItem "dist\ThermalEngine" | ForEach-Object { Write-Host $_.Name }
         shell: pwsh
 
       - name: Copy SensorHelper to dist
