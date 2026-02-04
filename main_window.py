@@ -256,7 +256,6 @@ class ThemeEditorWindow(QMainWindow):
         # Sleep/wake handling - auto-reconnect
         self._reconnect_timer = None
         self._reconnect_attempts = 0
-        self._max_reconnect_attempts = 10
         self._was_connected_before_sleep = False
         self._last_wake_time = 0
 
@@ -357,16 +356,7 @@ class ThemeEditorWindow(QMainWindow):
         """Attempt to reconnect to the display."""
         self._reconnect_attempts += 1
 
-        if self._reconnect_attempts > self._max_reconnect_attempts:
-            # Give up after max attempts
-            if self._reconnect_timer:
-                self._reconnect_timer.stop()
-                self._reconnect_timer = None
-            self.status_bar.showMessage("Could not reconnect to display - click Connect to retry")
-            self._was_connected_before_sleep = False
-            return
-
-        print(f"[Power] Reconnect attempt {self._reconnect_attempts}/{self._max_reconnect_attempts}")
+        print(f"[Power] Reconnect attempt {self._reconnect_attempts}")
 
         if self.connect_display(show_error=False):
             # Success!
@@ -377,9 +367,9 @@ class ThemeEditorWindow(QMainWindow):
             self.status_bar.showMessage("Reconnected to display after wake")
             print("[Power] Reconnected successfully")
         else:
-            # Keep trying with backoff
+            # Keep trying with backoff (no max limit - will retry indefinitely)
             self._start_reconnect_timer()
-            self.status_bar.showMessage(f"Reconnecting... attempt {self._reconnect_attempts}/{self._max_reconnect_attempts}")
+            self.status_bar.showMessage(f"Reconnecting... attempt {self._reconnect_attempts}")
 
     def load_default_preset_on_startup(self):
         """Load the default preset if one is configured."""

@@ -62,8 +62,8 @@ The app will automatically request administrator privileges when launched.
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/yourusername/ThermalEngine.git
-   cd ThermalEngine
+   git clone https://github.com/nathanielhernandez/Thermal-Engine.git
+   cd Thermal-Engine
    ```
 
 2. Install Python dependencies:
@@ -75,6 +75,35 @@ The app will automatically request administrator privileges when launched.
    ```bash
    python main.py
    ```
+
+### Local Test Build
+
+Build a standalone executable locally (mirrors the GitHub Actions release build):
+
+```powershell
+# Basic build
+.\build-local.ps1 -SkipInstaller
+
+# Clean build (removes previous artifacts first)
+.\build-local.ps1 -Clean -SkipInstaller
+
+# Build with installer (requires Inno Setup)
+.\build-local.ps1
+```
+
+**Output:**
+- `dist\ThermalEngine\ThermalEngine.exe` - Run directly to test
+- `ThermalEngine-local-dev.zip` - Portable distribution
+
+**Requirements:**
+- Python 3.11+
+- .NET SDK (for SensorHelperApp)
+- Inno Setup (optional, for installer)
+
+**Clean up test build:**
+```powershell
+Remove-Item -Recurse -Force dist, dist_helper, lhm -ErrorAction SilentlyContinue
+```
 
 ## Usage
 
@@ -149,7 +178,7 @@ The app will automatically request administrator privileges when launched.
 ## Project Structure
 
 ```
-ThermalEngine/
+Thermal-Engine/
 ├── main.py              # Entry point
 ├── main_window.py       # Main application window
 ├── canvas.py            # Visual preview widget
@@ -160,16 +189,24 @@ ThermalEngine/
 ├── sensors.py           # Hardware sensor polling (with auto-recovery)
 ├── video_background.py  # Video background support
 ├── constants.py         # Configuration constants
-├── SensorHelper/        # Sensor helper (in release build)
-│   ├── SensorHelperApp.exe  # Sensor helper process
-│   └── LibreHardwareMonitorLib.dll
+├── build-local.ps1      # Local build script (mirrors GitHub Actions)
 ├── SensorHelperApp/     # Sensor helper source code (.NET)
 │   ├── Program.cs
 │   └── SensorHelperApp.csproj
 ├── elements/            # Custom element plugins
 │   ├── line_chart.py
 │   └── gif.py
-└── presets/             # Saved presets
+├── presets/             # Saved presets
+└── .github/workflows/   # CI/CD workflows
+    └── release.yml      # Automated release build
+```
+
+**Build output (not tracked):**
+```
+dist/ThermalEngine/      # Standalone build output
+└── SensorHelper/        # Sensor helper (built from SensorHelperApp/)
+    ├── SensorHelperApp.exe
+    └── LibreHardwareMonitorLib.dll
 ```
 
 ## Building SensorHelperApp
