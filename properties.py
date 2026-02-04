@@ -20,6 +20,7 @@ def create_alignment_icon(align_type, size=20):
     - 'text_left', 'text_center', 'text_right' (text alignment - horizontal lines)
     - 'h_left', 'h_center', 'h_right' (object horizontal alignment)
     - 'v_top', 'v_middle', 'v_bottom' (object vertical alignment)
+    - 'dist_h', 'dist_v' (distribute horizontally/vertically)
     """
     pixmap = QPixmap(size, size)
     pixmap.fill(Qt.GlobalColor.transparent)
@@ -68,6 +69,19 @@ def create_alignment_icon(align_type, size=20):
         elif align_type == 'v_bottom':
             painter.fillRect(1, 11, 7, 7, color)
             painter.fillRect(11, 3, 7, 15, color)
+
+    elif align_type.startswith('dist_'):
+        # Distribution - 3 evenly spaced rectangles with arrows
+        if align_type == 'dist_h':
+            # 3 vertical bars evenly spaced horizontally
+            painter.fillRect(2, 4, 4, 12, color)
+            painter.fillRect(8, 4, 4, 12, color)
+            painter.fillRect(14, 4, 4, 12, color)
+        elif align_type == 'dist_v':
+            # 3 horizontal bars evenly spaced vertically
+            painter.fillRect(4, 2, 12, 4, color)
+            painter.fillRect(4, 8, 12, 4, color)
+            painter.fillRect(4, 14, 12, 4, color)
 
     painter.end()
     return QIcon(pixmap)
@@ -669,6 +683,7 @@ class PropertiesPanel(QWidget):
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setMaximumWidth(320)
         self.scroll_area = scroll
 
         self.props_widget = QWidget()
@@ -1194,9 +1209,11 @@ class PropertiesPanel(QWidget):
         self.multi_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.multi_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.multi_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.multi_scroll.setMaximumWidth(320)
 
         self.multi_widget = QWidget()
         self.multi_widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        self.multi_widget.setMaximumWidth(310)
         self.multi_layout = QVBoxLayout(self.multi_widget)
         self.multi_layout.setSpacing(8)
         self.multi_layout.setContentsMargins(4, 4, 4, 4)
@@ -1208,11 +1225,13 @@ class PropertiesPanel(QWidget):
         self.multi_name_label = self.create_label("Selection:")
         self.multi_name_value = QLabel("0 elements")
         self.multi_name_value.setStyleSheet("color: #0096ff; font-weight: bold;")
+        self.multi_name_value.setMaximumWidth(200)
         multi_general_layout.addRow(self.multi_name_label, self.multi_name_value)
 
         self.group_name_edit = QLineEdit()
         self.group_name_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.group_name_edit.setMinimumWidth(50)
+        self.group_name_edit.setMaximumWidth(200)
         self.group_name_edit.setPlaceholderText("Group name")
         self.group_name_edit.textChanged.connect(self.on_group_name_changed)
         self.group_name_label = self.create_label("Group:")
@@ -1341,11 +1360,17 @@ class PropertiesPanel(QWidget):
 
         # Distribution
         dist_layout = QHBoxLayout()
-        self.dist_h_btn = QPushButton("Horizontal")
+        self.dist_h_btn = QPushButton()
+        self.dist_h_btn.setIcon(create_alignment_icon('dist_h'))
+        self.dist_h_btn.setFixedSize(32, 26)
+        self.dist_h_btn.setToolTip("Distribute Horizontally")
         self.dist_h_btn.clicked.connect(self.distribute_horizontal)
         dist_layout.addWidget(self.dist_h_btn)
 
-        self.dist_v_btn = QPushButton("Vertical")
+        self.dist_v_btn = QPushButton()
+        self.dist_v_btn.setIcon(create_alignment_icon('dist_v'))
+        self.dist_v_btn.setFixedSize(32, 26)
+        self.dist_v_btn.setToolTip("Distribute Vertically")
         self.dist_v_btn.clicked.connect(self.distribute_vertical)
         dist_layout.addWidget(self.dist_v_btn)
 
