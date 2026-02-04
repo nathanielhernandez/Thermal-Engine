@@ -477,12 +477,37 @@ class ElementListPanel(QWidget):
         indices = self.get_selected_element_indices()
         if indices:
             self.elements_will_change.emit()
+
+            # Collect unique groups from elements being duplicated
+            groups_to_duplicate = set()
+            for idx in indices:
+                if self.elements[idx].group:
+                    groups_to_duplicate.add(self.elements[idx].group)
+
+            # Get all existing group names
+            existing_groups = set(el.group for el in self.elements if el.group)
+
+            # Create mapping from old group names to new unique names
+            group_name_map = {}
+            for old_name in groups_to_duplicate:
+                base_name = old_name
+                counter = 2
+                new_name = f"{base_name} ({counter})"
+                while new_name in existing_groups or new_name in group_name_map.values():
+                    counter += 1
+                    new_name = f"{base_name} ({counter})"
+                group_name_map[old_name] = new_name
+                existing_groups.add(new_name)  # Track for subsequent duplicates
+
             for idx in indices:
                 original = self.elements[idx]
                 new_element = ThemeElement.from_dict(original.to_dict())
                 new_element.name = f"{original.name}_copy"
                 new_element.x += 20
                 new_element.y += 20
+                # Use the new group name if this element was in a duplicated group
+                if original.group and original.group in group_name_map:
+                    new_element.group = group_name_map[original.group]
                 self.elements.append(new_element)
             self.refresh_list()
             self.elements_changed.emit()
