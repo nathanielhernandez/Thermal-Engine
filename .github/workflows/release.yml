@@ -130,7 +130,7 @@ jobs:
             --include-package=numpy `
             --include-package=PIL `
             --include-package=psutil `
-            --include-package=hidapi `
+            --include-package=hid `
             --include-package=elements `
             --include-data-dir=presets=presets `
             --include-data-files=elements/*.py=elements/ `
