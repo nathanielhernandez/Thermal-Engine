@@ -2153,14 +2153,22 @@ class ThemeEditorWindow(QMainWindow):
                 fill=color_rgba, width=arc_width
             )
 
-        # Draw value text (white, full opacity)
+        # Draw value text
         value_text = get_value_with_unit(value, element.source, getattr(element, 'temp_hide_unit', False))
         bbox = draw.textbbox((0, 0), value_text, font=font)
         text_width = bbox[2] - bbox[0]
         text_height = bbox[3] - bbox[1]
+        # Get text color (use custom text color if set, otherwise use element color)
+        if getattr(element, 'use_custom_text_color', False):
+            text_color = getattr(element, 'text_color', element.color)
+            text_opacity = getattr(element, 'text_color_opacity', 100)
+        else:
+            text_color = element.color
+            text_opacity = getattr(element, 'color_opacity', 100)
+        value_text_rgba = hex_to_rgba(text_color, text_opacity)
         draw.text(
             (x - text_width // 2, y - text_height // 2 - 10),
-            value_text, fill=(255, 255, 255, 255), font=font
+            value_text, fill=value_text_rgba, font=font
         )
 
         # Draw label text
@@ -2272,7 +2280,16 @@ class ThemeEditorWindow(QMainWindow):
                 text_x = x - text_width - 10  # 10px spacing
                 text_y = y + (height - text_height) // 2
 
-            draw.text((text_x, text_y), display_text, fill=(255, 255, 255, 255), font=font_small)
+            # Get text color (use custom text color if set, otherwise use element color)
+            if getattr(element, 'use_custom_text_color', False):
+                text_color = getattr(element, 'text_color', element.color)
+                text_opacity = getattr(element, 'text_color_opacity', 100)
+            else:
+                text_color = element.color
+                text_opacity = getattr(element, 'color_opacity', 100)
+            text_rgba = hex_to_rgba(text_color, text_opacity)
+
+            draw.text((text_x, text_y), display_text, fill=text_rgba, font=font_small)
 
         # Composite onto main image
         img.alpha_composite(overlay)
@@ -2452,9 +2469,14 @@ class ThemeEditorWindow(QMainWindow):
         bbox = draw.textbbox((0, 0), value_text, font=font)
         text_width = bbox[2] - bbox[0]
         text_height = bbox[3] - bbox[1]
+        # Get text color (use custom text color if set, otherwise use element color)
+        if getattr(element, 'use_custom_text_color', False):
+            text_color = getattr(element, 'text_color', element.color)
+        else:
+            text_color = element.color
         draw.text(
             (x - text_width // 2, y - text_height // 2 - 10),
-            value_text, fill="white", font=font
+            value_text, fill=text_color, font=font
         )
 
         bbox = draw.textbbox((0, 0), element.text, font=font_small)
@@ -2550,7 +2572,13 @@ class ThemeEditorWindow(QMainWindow):
                 text_x = x - text_width - 10  # 10px spacing
                 text_y = y + (height - text_height) // 2
 
-            draw.text((text_x, text_y), display_text, fill="white", font=font_small)
+            # Get text color (use custom text color if set, otherwise use element color)
+            if getattr(element, 'use_custom_text_color', False):
+                text_color = getattr(element, 'text_color', element.color)
+            else:
+                text_color = element.color
+
+            draw.text((text_x, text_y), display_text, fill=text_color, font=font_small)
 
     def image_to_jpeg(self, img, quality=80):
         """Convert image to JPEG bytes with optimized settings."""
