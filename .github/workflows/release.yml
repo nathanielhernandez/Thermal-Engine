@@ -133,7 +133,8 @@ jobs:
             --include-package=hidapi `
             --include-package=elements `
             --include-data-dir=presets=presets `
-            --include-data-dir=elements=elements `
+            --include-data-files=elements/*.py=elements/ `
+            --include-data-files=elements/*.py.disabled=elements/ `
             --include-data-files=icon.ico=icon.ico `
             --include-data-files=icon.png=icon.png `
             --assume-yes-for-downloads `
@@ -141,18 +142,20 @@ jobs:
             --output-filename=ThermalEngine.exe `
             main.py
 
-          # Verify elements folder was included
+          # Verify data directories were included
           Write-Host "=== Checking data directories ==="
           if (Test-Path "dist\main.dist\elements") {
-            Write-Host "elements folder exists"
+            Write-Host "elements folder exists:"
             Get-ChildItem "dist\main.dist\elements" | ForEach-Object { Write-Host "  $_" }
           } else {
-            Write-Host "WARNING: elements folder missing!"
+            Write-Host "ERROR: elements folder missing!"
+            exit 1
           }
           if (Test-Path "dist\main.dist\presets") {
             Write-Host "presets folder exists"
           } else {
-            Write-Host "WARNING: presets folder missing!"
+            Write-Host "ERROR: presets folder missing!"
+            exit 1
           }
 
           # Rename output folder to match expected structure
