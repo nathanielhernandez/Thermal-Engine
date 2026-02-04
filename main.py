@@ -13,8 +13,17 @@ import atexit
 import signal
 
 from PySide6.QtWidgets import QApplication, QMessageBox, QSystemTrayIcon, QMenu
-from PySide6.QtGui import QColor, QIcon, QPixmap, QPainter, QBrush
+from PySide6.QtGui import QColor, QIcon, QPixmap, QPainter, QBrush, QSurfaceFormat
 from PySide6.QtCore import Qt
+
+# High refresh rate / smooth rendering optimizations
+# Must be set before QApplication is created
+QApplication.setAttribute(Qt.AA_UseDesktopOpenGL)
+
+# Disable VSync to allow higher refresh rates
+fmt = QSurfaceFormat()
+fmt.setSwapInterval(0)
+QSurfaceFormat.setDefaultFormat(fmt)
 
 from sensors import init_sensors
 from main_window import ThemeEditorWindow
