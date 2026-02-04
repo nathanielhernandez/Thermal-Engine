@@ -120,7 +120,7 @@ Write-Host "`n[5/8] Building with Nuitka (this may take several minutes)..." -Fo
 python -m nuitka `
     --standalone `
     --windows-console-mode=disable `
-    --windows-icon-from-ico=icon.ico `
+    --windows-icon-from-ico=assets/icon.ico `
     --windows-uac-admin `
     --enable-plugin=pyside6 `
     --include-package=cv2 `
@@ -131,8 +131,8 @@ python -m nuitka `
     --include-package=elements `
     --include-data-dir=presets=presets `
     --include-data-files=elements/*.py=elements/ `
-    --include-data-files=icon.ico=icon.ico `
-    --include-data-files=icon.png=icon.png `
+    --include-data-files=assets/icon.ico=icon.ico `
+    --include-data-files=assets/icon.png=icon.png `
     --assume-yes-for-downloads `
     --output-dir=dist `
     --output-filename=ThermalEngine.exe `

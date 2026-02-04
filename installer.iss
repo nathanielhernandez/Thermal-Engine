@@ -19,7 +19,7 @@ Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
-SetupIconFile=icon.ico
+SetupIconFile=assets\icon.ico
 ; Update/upgrade support
 UsePreviousAppDir=yes
 CloseApplications=yes

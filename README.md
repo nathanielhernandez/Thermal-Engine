@@ -84,13 +84,13 @@ Build a standalone executable locally (mirrors the GitHub Actions release build)
 
 ```powershell
 # Basic build
-.\build-local.ps1 -SkipInstaller
+.\scripts\build-local.ps1 -SkipInstaller
 
 # Clean build (removes previous artifacts first)
-.\build-local.ps1 -Clean -SkipInstaller
+.\scripts\build-local.ps1 -Clean -SkipInstaller
 
 # Build with installer (requires Inno Setup)
-.\build-local.ps1
+.\scripts\build-local.ps1
 ```
 
 **Output:**
@@ -104,7 +104,7 @@ Build a standalone executable locally (mirrors the GitHub Actions release build)
 
 **Clean up test build:**
 ```powershell
-.\clean-local.ps1
+.\scripts\clean-local.ps1
 ```
 
 ## Usage
@@ -191,8 +191,13 @@ Thermal-Engine/
 ├── sensors.py           # Hardware sensor polling (with auto-recovery)
 ├── video_background.py  # Video background support
 ├── constants.py         # Configuration constants
-├── build-local.ps1      # Local build script (mirrors GitHub Actions)
-├── clean-local.ps1      # Clean up build artifacts
+├── scripts/             # Build and utility scripts
+│   ├── build-local.ps1  # Local build script (mirrors GitHub Actions)
+│   ├── clean-local.ps1  # Clean up build artifacts
+│   └── create_icon.py   # Icon generation utility
+├── assets/              # Icons and images
+│   ├── icon.ico
+│   └── icon.png
 ├── SensorHelperApp/     # Sensor helper source code (.NET)
 │   ├── Program.cs
 │   └── SensorHelperApp.csproj

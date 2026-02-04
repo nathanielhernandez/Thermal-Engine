@@ -50,8 +50,10 @@ def create_icon():
 
         images.append(img)
 
-    # Save as ICO
-    icon_path = os.path.join(os.path.dirname(__file__), 'icon.ico')
+    # Save as ICO (to assets folder)
+    assets_dir = os.path.join(os.path.dirname(__file__), '..', 'assets')
+    os.makedirs(assets_dir, exist_ok=True)
+    icon_path = os.path.join(assets_dir, 'icon.ico')
     images[0].save(
         icon_path,
         format='ICO',
@@ -61,7 +63,7 @@ def create_icon():
     print(f"Icon created: {icon_path}")
 
     # Also save as PNG for other uses
-    png_path = os.path.join(os.path.dirname(__file__), 'icon.png')
+    png_path = os.path.join(assets_dir, 'icon.png')
     images[-1].save(png_path, format='PNG')
     print(f"PNG created: {png_path}")
 
