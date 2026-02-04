@@ -11,6 +11,11 @@ class SensorHelper
         // Log errors to file for debugging
         string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "sensor_error.log");
 
+        // Force immediate output flushing - critical for subprocess communication
+        // when parent runs without a console (PyInstaller console=False)
+        Console.Out.Flush();
+        Console.SetOut(new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true });
+
         try
         {
             computer = new Computer
