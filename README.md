@@ -51,7 +51,7 @@ This application uses [LibreHardwareMonitor](https://github.com/LibreHardwareMon
 
 ### Download (Recommended)
 
-1. Go to [Releases](https://github.com/yourusername/ThermalEngine/releases)
+1. Go to [Releases](https://github.com/nathanielhernandez/ThermalEngine/releases)
 2. Download `ThermalEngine-vX.X.X-Setup.exe`
 3. Run the installer
 4. Launch ThermalEngine from the Start Menu or Desktop shortcut
