@@ -121,6 +121,7 @@ python -m nuitka `
     --standalone `
     --windows-console-mode=disable `
     --windows-icon-from-ico=assets/icon.ico `
+    --windows-company-name="Thermal Engine" `
     --windows-uac-admin `
     --enable-plugin=pyside6 `
     --include-package=cv2 `

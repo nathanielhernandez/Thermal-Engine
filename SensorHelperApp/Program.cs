@@ -348,6 +348,21 @@ class SensorHelper
                             cpuClockCount++;
                         }
                     }
+                    else if (stype == "Power")
+                    {
+                        // CPU power sensors in SubHardware
+                        if (hwType.Contains("Cpu") && (name.Contains("Package") || name.Contains("CPU") || name.Contains("Power")))
+                        {
+                            if (cpuPower == 0)
+                                cpuPower = val;
+                        }
+                        // GPU power sensors in SubHardware
+                        else if (hwType.Contains("Gpu") && (name.Contains("Package") || name.Contains("GPU") || name == "Power"))
+                        {
+                            if (gpuPower == 0)
+                                gpuPower = val;
+                        }
+                    }
                 }
             }
         }

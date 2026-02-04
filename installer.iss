@@ -2,7 +2,7 @@
 ; This script is used by GitHub Actions to create the installer
 
 #define MyAppName "ThermalEngine"
-#define MyAppPublisher "ThermalEngine"
+#define MyAppPublisher "Thermal Engine"
 #define MyAppExeName "ThermalEngine.exe"
 
 [Setup]

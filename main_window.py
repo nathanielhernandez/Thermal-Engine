@@ -1217,11 +1217,16 @@ class ThemeEditorWindow(QMainWindow):
         info.append("=== Sensor Diagnostic ===\n")
         info.append(f"LibreHardwareMonitor (subprocess): {sensors.HAS_LHM}")
 
-        dll_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "LibreHardwareMonitorLib.dll")
-        info.append(f"DLL path: {dll_path}")
-        info.append(f"DLL exists: {os.path.exists(dll_path)}")
+        # Check SensorHelper directory where DLLs actually live
+        app_dir = os.path.dirname(os.path.abspath(__file__))
+        sensor_helper_dir = os.path.join(app_dir, "SensorHelper")
 
-        hidsharp_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "HidSharp.dll")
+        dll_path = os.path.join(sensor_helper_dir, "LibreHardwareMonitorLib.dll")
+        info.append(f"SensorHelper path: {sensor_helper_dir}")
+        info.append(f"SensorHelper exists: {os.path.isdir(sensor_helper_dir)}")
+        info.append(f"LibreHardwareMonitorLib.dll exists: {os.path.exists(dll_path)}")
+
+        hidsharp_path = os.path.join(sensor_helper_dir, "HidSharp.dll")
         info.append(f"HidSharp.dll exists: {os.path.exists(hidsharp_path)}")
         info.append("")
 
@@ -1234,6 +1239,25 @@ class ThemeEditorWindow(QMainWindow):
                 if lhm_data:
                     for key, value in lhm_data.items():
                         info.append(f"  {key}: {value}")
+
+                    # Check for CPU sensors returning 0 (common issue)
+                    cpu_temp = lhm_data.get('cpu_temp', 0)
+                    cpu_clock = lhm_data.get('cpu_clock', 0)
+                    cpu_power = lhm_data.get('cpu_power', 0)
+                    gpu_temp = lhm_data.get('gpu_temp', 0)
+
+                    if cpu_temp == 0 and cpu_clock == 0 and cpu_power == 0:
+                        info.append("")
+                        info.append("WARNING: CPU sensors returning 0!")
+                        if gpu_temp > 0:
+                            info.append("(GPU sensors work, so this is CPU-specific)")
+                        info.append("")
+                        info.append("Possible causes:")
+                        info.append("  1. App not running as Administrator")
+                        info.append("     - Right-click ThermalEngine > Run as administrator")
+                        info.append("  2. Antivirus blocking the hardware driver")
+                        info.append("     - Add ThermalEngine folder to your antivirus exclusions")
+                        info.append("  3. CPU not supported by LibreHardwareMonitor")
                 else:
                     info.append("  (no data returned)")
             except Exception as e:
