@@ -1,8 +1,6 @@
 # Build artifacts
 build/
 dist/
-# Keep ThermalEngine.spec for PyInstaller builds
-!ThermalEngine.spec
 
 # Python
 __pycache__/
