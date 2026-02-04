@@ -673,6 +673,7 @@ class PropertiesPanel(QWidget):
 
         self.props_widget = QWidget()
         self.props_widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        self.props_widget.setMaximumWidth(310)
         self.props_layout = QVBoxLayout(self.props_widget)
         self.props_layout.setSpacing(8)
         self.props_layout.setContentsMargins(4, 4, 4, 4)
