@@ -117,11 +117,16 @@ if (Test-Path "dist_helper/SensorHelperApp.exe") {
 
 # Build with Nuitka
 Write-Host "`n[5/8] Building with Nuitka (this may take several minutes)..." -ForegroundColor Yellow
+$versionNum = $Version.TrimStart('v').Split('-')[0]
+if ($versionNum -notmatch '^\d+\.\d+\.\d+') { $versionNum = "1.0.0" }
 python -m nuitka `
     --standalone `
     --windows-console-mode=disable `
     --windows-icon-from-ico=assets/icon.ico `
     --windows-company-name="Thermal Engine" `
+    --windows-product-name="ThermalEngine" `
+    --windows-product-version="$versionNum" `
+    --windows-file-version="$versionNum" `
     --windows-uac-admin `
     --enable-plugin=pyside6 `
     --include-package=cv2 `

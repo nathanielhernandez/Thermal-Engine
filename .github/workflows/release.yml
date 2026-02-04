@@ -120,11 +120,16 @@ jobs:
 
       - name: Build with Nuitka
         run: |
+          # Extract version number from tag (remove 'v' prefix)
+          $version = "${{ steps.version.outputs.VERSION }}".TrimStart('v')
           python -m nuitka `
             --standalone `
             --windows-console-mode=disable `
             --windows-icon-from-ico=assets/icon.ico `
             --windows-company-name="Thermal Engine" `
+            --windows-product-name="ThermalEngine" `
+            --windows-product-version="$version" `
+            --windows-file-version="$version" `
             --windows-uac-admin `
             --enable-plugin=pyside6 `
             --include-package=cv2 `
