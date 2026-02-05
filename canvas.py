@@ -151,18 +151,28 @@ class CanvasPreview(QWidget):
 
         if key not in self._animated_values:
             # Initialize with current value
-            self._animated_values[key] = target_value
+            self._animated_values[key] = float(target_value)
             return target_value
 
         current = self._animated_values[key]
-        speed = getattr(element, 'animation_speed', 0.15)
 
-        # Interpolate towards target
-        if abs(current - target_value) < 0.1:
-            self._animated_values[key] = target_value
+        # Use smooth exponential interpolation
+        # Lower factor = smoother animation (0.08 for butter smooth)
+        speed = getattr(element, 'animation_speed', 0.08)
+
+        # Very small threshold for smooth finish
+        diff = target_value - current
+        if abs(diff) < 0.01:
+            self._animated_values[key] = float(target_value)
             return target_value
 
-        new_value = current + (target_value - current) * speed
+        # Smooth interpolation with minimum step to prevent stalling
+        step = diff * speed
+        # Ensure minimum movement to prevent getting stuck
+        if abs(step) < 0.01 and abs(diff) > 0.01:
+            step = 0.01 if diff > 0 else -0.01
+
+        new_value = current + step
         self._animated_values[key] = new_value
         return new_value
 
