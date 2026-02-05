@@ -2240,20 +2240,24 @@ class ThemeEditorWindow(QMainWindow):
 
         # Check for rounded ends (pill shape)
         rounded_ends = getattr(element, 'gauge_rounded_ends', False)
+        import math
 
-        # Draw background arc - single thick arc instead of multiple thin ones
-        bg_rgba = hex_to_rgba(element.background_color, bg_opacity)
+        # Draw background arc on separate layer for proper opacity handling
         arc_width = 15  # Match canvas pen width
         arc_radius = radius - arc_width // 2
-        draw.arc(
+        bg_layer = Image.new('RGBA', img.size, (0, 0, 0, 0))
+        bg_draw = ImageDraw.Draw(bg_layer)
+
+        # Draw at full opacity
+        bg_rgb = hex_to_rgba(element.background_color, 100)
+        bg_draw.arc(
             [x - arc_radius, y - arc_radius, x + arc_radius, y + arc_radius],
             start=135, end=405,
-            fill=bg_rgba, width=arc_width
+            fill=bg_rgb, width=arc_width
         )
 
         # Draw rounded end caps for background arc
         if rounded_ends:
-            import math
             cap_radius = arc_width // 2
             # Radial offset to push caps inward along the radius direction
             radial_offset = -7
@@ -2261,26 +2265,39 @@ class ThemeEditorWindow(QMainWindow):
             start_angle = 135
             start_x = x + (arc_radius + radial_offset) * math.cos(math.radians(start_angle))
             start_y = y + (arc_radius + radial_offset) * math.sin(math.radians(start_angle))
-            draw.ellipse(
+            bg_draw.ellipse(
                 [start_x - cap_radius, start_y - cap_radius,
                  start_x + cap_radius, start_y + cap_radius],
-                fill=bg_rgba
+                fill=bg_rgb
             )
             # End cap at 45° (bottom-right)
             end_angle_bg = 45
             end_x = x + (arc_radius + radial_offset) * math.cos(math.radians(end_angle_bg))
             end_y = y + (arc_radius + radial_offset) * math.sin(math.radians(end_angle_bg))
-            draw.ellipse(
+            bg_draw.ellipse(
                 [end_x - cap_radius, end_y - cap_radius,
                  end_x + cap_radius, end_y + cap_radius],
-                fill=bg_rgba
+                fill=bg_rgb
             )
+
+        # Apply bg_opacity to the background layer by scaling the alpha channel
+        if bg_opacity < 100:
+            r, g, b, a = bg_layer.split()
+            a = a.point(lambda x: int(x * bg_opacity / 100))
+            bg_layer = Image.merge('RGBA', (r, g, b, a))
+
+        # Composite background layer onto the main overlay
+        overlay.alpha_composite(bg_layer)
 
         # Draw value arc - use float for smoother animation
         sweep = 270 * min(value, 100) / 100
         end_angle = 135 + sweep
 
         if sweep > 0:
+            # Create separate layer for value arc to properly handle opacity
+            value_layer = Image.new('RGBA', img.size, (0, 0, 0, 0))
+            value_draw = ImageDraw.Draw(value_layer)
+
             if use_gradient:
                 # Draw gradient arc using multiple small segments
                 gradient_stops = getattr(element, 'gradient_stops', [(0.0, "#00ff96"), (1.0, "#ff4444")])
@@ -2292,66 +2309,75 @@ class ThemeEditorWindow(QMainWindow):
                     # Calculate gradient position (0 to 1) based on arc position
                     t = i / 270.0  # Position along full arc range
                     grad_color = self.interpolate_gradient_color(gradient_stops, t)
-                    segment_rgba = hex_to_rgba(grad_color, color_opacity)
-                    draw.arc(
+                    # Draw at full opacity, we'll apply color_opacity to the layer
+                    segment_rgb = hex_to_rgba(grad_color, 100)
+                    value_draw.arc(
                         [x - arc_radius, y - arc_radius, x + arc_radius, y + arc_radius],
                         start=segment_start, end=segment_end,
-                        fill=segment_rgba, width=arc_width
+                        fill=segment_rgb, width=arc_width
                     )
                 # Draw rounded end caps for gradient arc
                 if rounded_ends:
-                    import math
                     cap_radius = arc_width // 2
                     radial_offset = -7
                     # Start cap (use start color)
                     start_color = self.interpolate_gradient_color(gradient_stops, 0)
-                    start_rgba = hex_to_rgba(start_color, color_opacity)
+                    start_rgb = hex_to_rgba(start_color, 100)
                     start_x = x + (arc_radius + radial_offset) * math.cos(math.radians(135))
                     start_y = y + (arc_radius + radial_offset) * math.sin(math.radians(135))
-                    draw.ellipse(
+                    value_draw.ellipse(
                         [start_x - cap_radius, start_y - cap_radius,
                          start_x + cap_radius, start_y + cap_radius],
-                        fill=start_rgba
+                        fill=start_rgb
                     )
                     # End cap (use color at current position)
                     end_t = sweep / 270.0
                     end_color = self.interpolate_gradient_color(gradient_stops, end_t)
-                    end_rgba = hex_to_rgba(end_color, color_opacity)
+                    end_rgb = hex_to_rgba(end_color, 100)
                     end_x = x + (arc_radius + radial_offset) * math.cos(math.radians(end_angle))
                     end_y = y + (arc_radius + radial_offset) * math.sin(math.radians(end_angle))
-                    draw.ellipse(
+                    value_draw.ellipse(
                         [end_x - cap_radius, end_y - cap_radius,
                          end_x + cap_radius, end_y + cap_radius],
-                        fill=end_rgba
+                        fill=end_rgb
                     )
             else:
-                color_rgba = hex_to_rgba(color, color_opacity)
-                draw.arc(
+                # Draw at full opacity
+                color_rgb = hex_to_rgba(color, 100)
+                value_draw.arc(
                     [x - arc_radius, y - arc_radius, x + arc_radius, y + arc_radius],
                     start=135, end=end_angle,
-                    fill=color_rgba, width=arc_width
+                    fill=color_rgb, width=arc_width
                 )
                 # Draw rounded end caps for solid color arc
                 if rounded_ends:
-                    import math
                     cap_radius = arc_width // 2
                     radial_offset = -7
                     # Start cap
                     start_x = x + (arc_radius + radial_offset) * math.cos(math.radians(135))
                     start_y = y + (arc_radius + radial_offset) * math.sin(math.radians(135))
-                    draw.ellipse(
+                    value_draw.ellipse(
                         [start_x - cap_radius, start_y - cap_radius,
                          start_x + cap_radius, start_y + cap_radius],
-                        fill=color_rgba
+                        fill=color_rgb
                     )
                     # End cap
                     end_x = x + (arc_radius + radial_offset) * math.cos(math.radians(end_angle))
                     end_y = y + (arc_radius + radial_offset) * math.sin(math.radians(end_angle))
-                    draw.ellipse(
+                    value_draw.ellipse(
                         [end_x - cap_radius, end_y - cap_radius,
                          end_x + cap_radius, end_y + cap_radius],
-                        fill=color_rgba
+                        fill=color_rgb
                     )
+
+            # Apply color_opacity to the value layer by scaling the alpha channel
+            if color_opacity < 100:
+                r, g, b, a = value_layer.split()
+                a = a.point(lambda x: int(x * color_opacity / 100))
+                value_layer = Image.merge('RGBA', (r, g, b, a))
+
+            # Composite value layer onto the main overlay
+            overlay.alpha_composite(value_layer)
 
         # Draw value text
         value_text = get_value_with_unit(value, element.source, getattr(element, 'temp_hide_unit', False))
