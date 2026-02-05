@@ -2438,31 +2438,43 @@ class ThemeEditorWindow(QMainWindow):
         rounded = getattr(element, 'rounded_corners', False)
         corner_radius = height // 2 if rounded else 0
 
-        # Create overlay for drawing with transparency
+        # Create overlay for final compositing
         overlay = Image.new('RGBA', img.size, (0, 0, 0, 0))
-        draw = ImageDraw.Draw(overlay)
 
-        # Draw background
-        bg_rgba = hex_to_rgba(element.background_color, bg_opacity)
+        # Draw background on separate layer for proper opacity handling
+        bg_layer = Image.new('RGBA', img.size, (0, 0, 0, 0))
+        bg_draw = ImageDraw.Draw(bg_layer)
+        bg_rgb = hex_to_rgba(element.background_color, 100)  # Full opacity for drawing
         if rounded:
-            draw.rounded_rectangle(
+            bg_draw.rounded_rectangle(
                 [x, y, x + width, y + height],
                 radius=corner_radius,
-                fill=bg_rgba
+                fill=bg_rgb
             )
         else:
-            draw.rectangle(
+            bg_draw.rectangle(
                 [x, y, x + width, y + height],
-                fill=bg_rgba
+                fill=bg_rgb
             )
 
-        # Draw fill
+        # Apply bg_opacity by scaling alpha channel
+        if bg_opacity < 100:
+            r, g, b, a = bg_layer.split()
+            a = a.point(lambda px: int(px * bg_opacity / 100))
+            bg_layer = Image.merge('RGBA', (r, g, b, a))
+
+        # Composite background layer onto overlay
+        overlay.alpha_composite(bg_layer)
+
+        # Draw fill on separate layer
         fill_width = int(width * min(value, 100) / 100)
         if fill_width > 0:
+            fill_layer = Image.new('RGBA', img.size, (0, 0, 0, 0))
+            fill_draw = ImageDraw.Draw(fill_layer)
+
             if use_gradient:
-                # Draw horizontal gradient using lines
+                # Draw horizontal gradient using lines at full opacity
                 gradient_stops = getattr(element, 'gradient_stops', [(0.0, "#00ff96"), (1.0, "#ff4444")])
-                alpha = int(255 * color_opacity / 100)
 
                 if rounded and fill_width > 0:
                     # Create gradient on temporary image, then mask with rounded rect
@@ -2475,7 +2487,7 @@ class ThemeEditorWindow(QMainWindow):
                         r = int(grad_color[1:3], 16)
                         g = int(grad_color[3:5], 16)
                         b = int(grad_color[5:7], 16)
-                        gradient_draw.line([(i, 0), (i, height - 1)], fill=(r, g, b, alpha))
+                        gradient_draw.line([(i, 0), (i, height - 1)], fill=(r, g, b, 255))
 
                     # Create rounded rectangle mask
                     mask = Image.new('L', (fill_width, height), 0)
@@ -2485,8 +2497,8 @@ class ThemeEditorWindow(QMainWindow):
                     # Apply mask to gradient
                     gradient_layer.putalpha(ImageChops.multiply(gradient_layer.split()[3], mask))
 
-                    # Paste onto overlay
-                    overlay.paste(gradient_layer, (x, y), gradient_layer)
+                    # Paste onto fill layer
+                    fill_layer.paste(gradient_layer, (x, y), gradient_layer)
                 else:
                     # No rounded corners, draw lines directly
                     for i in range(fill_width):
@@ -2495,20 +2507,32 @@ class ThemeEditorWindow(QMainWindow):
                         r = int(grad_color[1:3], 16)
                         g = int(grad_color[3:5], 16)
                         b = int(grad_color[5:7], 16)
-                        draw.line([(x + i, y), (x + i, y + height - 1)], fill=(r, g, b, alpha))
+                        fill_draw.line([(x + i, y), (x + i, y + height - 1)], fill=(r, g, b, 255))
             else:
-                fill_rgba = hex_to_rgba(color, color_opacity)
+                fill_rgb = hex_to_rgba(color, 100)  # Full opacity for drawing
                 if rounded:
-                    draw.rounded_rectangle(
+                    fill_draw.rounded_rectangle(
                         [x, y, x + fill_width, y + height],
                         radius=corner_radius,
-                        fill=fill_rgba
+                        fill=fill_rgb
                     )
                 else:
-                    draw.rectangle(
+                    fill_draw.rectangle(
                         [x, y, x + fill_width, y + height],
-                        fill=fill_rgba
+                        fill=fill_rgb
                     )
+
+            # Apply color_opacity by scaling alpha channel
+            if color_opacity < 100:
+                r, g, b, a = fill_layer.split()
+                a = a.point(lambda px: int(px * color_opacity / 100))
+                fill_layer = Image.merge('RGBA', (r, g, b, a))
+
+            # Composite fill layer onto overlay
+            overlay.alpha_composite(fill_layer)
+
+        # Now use overlay's draw for text (text doesn't need the layer approach)
+        draw = ImageDraw.Draw(overlay)
 
         # Draw text based on bar_text_mode and bar_text_position
         bar_text_mode = getattr(element, 'bar_text_mode', 'full')
