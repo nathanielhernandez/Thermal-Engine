@@ -849,17 +849,56 @@ class PropertiesPanel(QWidget):
         self.bg_color_label = self.create_label("BG Color:")
         colors_layout.addRow(self.bg_color_label, self.bg_color_btn)
 
-        # Gradient fill checkbox (for gauges) - at bottom of pane
+        # Gradient fill checkbox (for gauges)
         self.gradient_fill_check = QCheckBox("Use Gradient Fill")
         self.gradient_fill_check.stateChanged.connect(self.on_gradient_fill_changed)
         self.gradient_fill_label = QLabel("")
         colors_layout.addRow(self.gradient_fill_label, self.gradient_fill_check)
 
+        # Bar gauge border options - checkbox and group box sub-panel
+        self.bar_border_check = QCheckBox("Show Border")
+        self.bar_border_check.stateChanged.connect(self.on_bar_border_changed)
+        self.bar_border_label = QLabel("")
+        colors_layout.addRow(self.bar_border_label, self.bar_border_check)
+
+        # Border options group box (shown when border is enabled)
+        self.bar_border_group = QGroupBox("Border")
+        border_group_layout = QFormLayout(self.bar_border_group)
+        border_group_layout.setContentsMargins(8, 8, 8, 8)
+
+        # Stroke position dropdown
+        self.bar_border_position_combo = NoScrollComboBox()
+        self.bar_border_position_combo.addItem("Inside", "inside")
+        self.bar_border_position_combo.addItem("Center", "center")
+        self.bar_border_position_combo.addItem("Outside", "outside")
+        self.bar_border_position_combo.currentIndexChanged.connect(self.on_property_changed)
+        border_group_layout.addRow(self.create_label("Position:"), self.bar_border_position_combo)
+
+        # Border width
+        self.bar_border_width_spin = NoScrollSpinBox()
+        self.bar_border_width_spin.setRange(1, 20)
+        self.bar_border_width_spin.setValue(2)
+        self.bar_border_width_spin.valueChanged.connect(self.on_property_changed)
+        border_group_layout.addRow(self.create_label("Width:"), self.bar_border_width_spin)
+
+        # Border color (opacity handled in color picker)
+        self.bar_border_color_btn = QPushButton()
+        self.bar_border_color_btn.setFixedHeight(26)
+        self.bar_border_color_btn.setStyleSheet("background-color: #ffffff;")
+        self.bar_border_color_btn.clicked.connect(self.choose_bar_border_color)
+        border_group_layout.addRow(self.create_label("Color:"), self.bar_border_color_btn)
+
+        # Add group box to colors layout (hidden by default)
+        self.bar_border_group.setVisible(False)
+        colors_layout.addRow(self.bar_border_group)
+
         self.section_fields['colors'] = [
             (self.color_label, self.color_btn),
             (self.gradient_preview_label, self.gradient_preview),
             (self.bg_color_label, self.bg_color_btn),
-            (self.gradient_fill_label, self.gradient_fill_check)
+            (self.gradient_fill_label, self.gradient_fill_check),
+            (self.bar_border_label, self.bar_border_check),
+            (self.bar_border_group, None)
         ]
 
         # === APPEARANCE SECTION ===
@@ -1213,48 +1252,32 @@ class PropertiesPanel(QWidget):
         self.smooth_label = QLabel("")
         options_layout.addRow(self.smooth_label, self.smooth_check)
 
-        # Bar gauge options
+        # Bar gauge - Rounded corners option
         self.rounded_corners_check = QCheckBox("Rounded Corners")
         self.rounded_corners_check.stateChanged.connect(self.on_property_changed)
         self.rounded_corners_label = QLabel("")
         options_layout.addRow(self.rounded_corners_label, self.rounded_corners_check)
 
-        # Bar gauge border options - checkbox and group box sub-panel
-        self.bar_border_check = QCheckBox("Show Border")
-        self.bar_border_check.stateChanged.connect(self.on_bar_border_changed)
-        self.bar_border_label = QLabel("")
-        options_layout.addRow(self.bar_border_label, self.bar_border_check)
+        # Circle gauge - Rounded arc ends option
+        self.gauge_rounded_ends_check = QCheckBox("Rounded Arc Ends")
+        self.gauge_rounded_ends_check.setToolTip("Draw pill-shaped rounded ends on the gauge arc")
+        self.gauge_rounded_ends_check.stateChanged.connect(self.on_property_changed)
+        self.gauge_rounded_ends_label = QLabel("")
+        options_layout.addRow(self.gauge_rounded_ends_label, self.gauge_rounded_ends_check)
 
-        # Border options group box (shown when border is enabled)
-        self.bar_border_group = QGroupBox("Border")
-        border_group_layout = QFormLayout(self.bar_border_group)
-        border_group_layout.setContentsMargins(8, 8, 8, 8)
+        # Gauge options - Smooth transitions
+        self.animate_gauge_check = QCheckBox("Smooth Transitions")
+        self.animate_gauge_check.setToolTip("Smoothly animate gauge transitions when values change")
+        self.animate_gauge_check.stateChanged.connect(self.on_property_changed)
+        self.animate_gauge_label = QLabel("")
+        options_layout.addRow(self.animate_gauge_label, self.animate_gauge_check)
 
-        # Stroke position dropdown
-        self.bar_border_position_combo = NoScrollComboBox()
-        self.bar_border_position_combo.addItem("Inside", "inside")
-        self.bar_border_position_combo.addItem("Center", "center")
-        self.bar_border_position_combo.addItem("Outside", "outside")
-        self.bar_border_position_combo.currentIndexChanged.connect(self.on_property_changed)
-        border_group_layout.addRow(self.create_label("Position:"), self.bar_border_position_combo)
-
-        # Border width
-        self.bar_border_width_spin = NoScrollSpinBox()
-        self.bar_border_width_spin.setRange(1, 20)
-        self.bar_border_width_spin.setValue(2)
-        self.bar_border_width_spin.valueChanged.connect(self.on_property_changed)
-        border_group_layout.addRow(self.create_label("Width:"), self.bar_border_width_spin)
-
-        # Border color (opacity handled in color picker)
-        self.bar_border_color_btn = QPushButton()
-        self.bar_border_color_btn.setFixedHeight(26)
-        self.bar_border_color_btn.setStyleSheet("background-color: #ffffff;")
-        self.bar_border_color_btn.clicked.connect(self.choose_bar_border_color)
-        border_group_layout.addRow(self.create_label("Color:"), self.bar_border_color_btn)
-
-        # Add group box to main layout (hidden by default)
-        self.bar_border_group.setVisible(False)
-        options_layout.addRow(self.bar_border_group)
+        # Gauge options - Auto color change
+        self.auto_color_change_check = QCheckBox("Auto Color (warn/critical)")
+        self.auto_color_change_check.setToolTip("Automatically change color at warning (70%) and critical (90%) thresholds")
+        self.auto_color_change_check.stateChanged.connect(self.on_property_changed)
+        self.auto_color_change_label = QLabel("")
+        options_layout.addRow(self.auto_color_change_label, self.auto_color_change_check)
 
         # Temperature display option
         self.temp_hide_unit_check = QCheckBox("Hide unit letter (show ° only)")
@@ -1262,25 +1285,6 @@ class PropertiesPanel(QWidget):
         self.temp_hide_unit_check.stateChanged.connect(self.on_property_changed)
         self.temp_hide_unit_label = QLabel("")
         options_layout.addRow(self.temp_hide_unit_label, self.temp_hide_unit_check)
-
-        # Gauge options
-        self.auto_color_change_check = QCheckBox("Auto Color (warn/critical)")
-        self.auto_color_change_check.setToolTip("Automatically change color at warning (70%) and critical (90%) thresholds")
-        self.auto_color_change_check.stateChanged.connect(self.on_property_changed)
-        self.auto_color_change_label = QLabel("")
-        options_layout.addRow(self.auto_color_change_label, self.auto_color_change_check)
-
-        self.animate_gauge_check = QCheckBox("Smooth Transitions")
-        self.animate_gauge_check.setToolTip("Smoothly animate gauge transitions when values change")
-        self.animate_gauge_check.stateChanged.connect(self.on_property_changed)
-        self.animate_gauge_label = QLabel("")
-        options_layout.addRow(self.animate_gauge_label, self.animate_gauge_check)
-
-        self.gauge_rounded_ends_check = QCheckBox("Rounded Arc Ends")
-        self.gauge_rounded_ends_check.setToolTip("Draw pill-shaped rounded ends on the gauge arc")
-        self.gauge_rounded_ends_check.stateChanged.connect(self.on_property_changed)
-        self.gauge_rounded_ends_label = QLabel("")
-        options_layout.addRow(self.gauge_rounded_ends_label, self.gauge_rounded_ends_check)
 
         # Digital clock time format options
         self.time_format_combo = NoScrollComboBox()
@@ -1336,10 +1340,10 @@ class PropertiesPanel(QWidget):
             (self.line_thickness_label, self.line_thickness_spin),
             (self.smooth_label, self.smooth_check),
             (self.rounded_corners_label, self.rounded_corners_check),
-            (self.temp_hide_unit_label, self.temp_hide_unit_check),
-            (self.auto_color_change_label, self.auto_color_change_check),
-            (self.animate_gauge_label, self.animate_gauge_check),
             (self.gauge_rounded_ends_label, self.gauge_rounded_ends_check),
+            (self.animate_gauge_label, self.animate_gauge_check),
+            (self.auto_color_change_label, self.auto_color_change_check),
+            (self.temp_hide_unit_label, self.temp_hide_unit_check),
             (self.time_format_label, self.time_format_combo),
             (self.show_am_pm_label, self.show_am_pm_check),
             (self.show_seconds_label, self.show_seconds_check),
