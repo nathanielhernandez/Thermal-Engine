@@ -1652,7 +1652,8 @@ class PropertiesPanel(QWidget):
                 "font": False, "font_size": False, "font_style": False,
                 "value_text_group": True, "label_text_group": True,
                 "align": False, "clip": False, "source": True, "value": True, "image": False,
-                "auto_color_change": True, "animate_gauge": True, "gauge_rounded_ends": True
+                "auto_color_change": True, "animate_gauge": True, "gauge_rounded_ends": True,
+                "bar_border": True
             },
             "text": {
                 "width": True, "height": True, "radius": False,

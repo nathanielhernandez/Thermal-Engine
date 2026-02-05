@@ -418,6 +418,68 @@ class CanvasPreview(QWidget):
                 225 * 16, sweep
             )
 
+        # Draw border if enabled
+        bar_border = getattr(element, 'bar_border', False)
+        if bar_border:
+            border_width = int(getattr(element, 'bar_border_width', 2) * self.scale)
+            border_color = getattr(element, 'bar_border_color', '#ffffff')
+            border_opacity = getattr(element, 'bar_border_opacity', 100)
+            border_position = getattr(element, 'bar_border_position', 'center')
+            border_qcolor = apply_opacity(border_color, border_opacity)
+
+            half_pen = pen_width / 2
+            half_border = border_width / 2
+
+            # Calculate radius adjustment based on border position
+            if border_position == "inside":
+                # Border inside the gauge arc
+                inner_radius = radius - half_pen + half_border
+                outer_radius = radius - half_pen + half_border + border_width
+            elif border_position == "center":
+                # Border centered on gauge edge
+                inner_radius = radius - half_pen - half_border
+                outer_radius = radius + half_pen + half_border
+            else:  # outside
+                # Border outside the gauge arc
+                inner_radius = radius + half_pen - half_border - border_width
+                outer_radius = radius + half_pen - half_border
+
+            # Draw inner arc border
+            border_pen = QPen(border_qcolor, border_width)
+            if rounded_ends:
+                border_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            painter.setPen(border_pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+
+            # Draw border arcs (inner and outer edges of the gauge arc)
+            inner_r = int(radius - half_pen)
+            outer_r = int(radius + half_pen)
+
+            if border_position == "inside":
+                border_r = inner_r + int(half_border)
+            elif border_position == "center":
+                # Draw both inner and outer borders
+                border_pen_inner = QPen(border_qcolor, border_width)
+                border_pen_inner.setCapStyle(Qt.PenCapStyle.RoundCap if rounded_ends else Qt.PenCapStyle.FlatCap)
+                painter.setPen(border_pen_inner)
+                painter.drawArc(
+                    x - inner_r, y - inner_r, inner_r * 2, inner_r * 2,
+                    225 * 16, -270 * 16
+                )
+                painter.drawArc(
+                    x - outer_r, y - outer_r, outer_r * 2, outer_r * 2,
+                    225 * 16, -270 * 16
+                )
+                border_r = None  # Skip single arc draw
+            else:  # outside
+                border_r = outer_r - int(half_border)
+
+            if border_position != "center":
+                painter.drawArc(
+                    x - border_r, y - border_r, border_r * 2, border_r * 2,
+                    225 * 16, -270 * 16
+                )
+
         # Draw value text
         painter.setPen(QPen(get_text_color(element)))
         font = QFont(element.font_family)

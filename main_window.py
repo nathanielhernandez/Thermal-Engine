@@ -2379,6 +2379,64 @@ class ThemeEditorWindow(QMainWindow):
             # Composite value layer onto the main overlay
             overlay.alpha_composite(value_layer)
 
+        # Draw border if enabled
+        bar_border = getattr(element, 'bar_border', False)
+        if bar_border:
+            border_width = getattr(element, 'bar_border_width', 2)
+            border_color = getattr(element, 'bar_border_color', '#ffffff')
+            border_opacity = getattr(element, 'bar_border_opacity', 100)
+            border_position = getattr(element, 'bar_border_position', 'center')
+
+            # Create border layer for proper opacity handling
+            border_layer = Image.new('RGBA', img.size, (0, 0, 0, 0))
+            border_draw = ImageDraw.Draw(border_layer)
+            border_rgb = hex_to_rgba(border_color, 100)  # Full opacity for drawing
+
+            half_arc = arc_width / 2
+            inner_r = arc_radius - half_arc  # Inner edge of gauge arc
+            outer_r = arc_radius + half_arc  # Outer edge of gauge arc
+
+            # PIL draws stroke inside the bounding box
+            if border_position == "inside":
+                # Draw border on inner edge of gauge
+                border_r = int(inner_r)
+                border_draw.arc(
+                    [x - border_r, y - border_r, x + border_r, y + border_r],
+                    start=135, end=405,
+                    fill=border_rgb, width=border_width
+                )
+            elif border_position == "center":
+                # Draw borders on both inner and outer edges
+                inner_border_r = int(inner_r)
+                outer_border_r = int(outer_r)
+                border_draw.arc(
+                    [x - inner_border_r, y - inner_border_r, x + inner_border_r, y + inner_border_r],
+                    start=135, end=405,
+                    fill=border_rgb, width=border_width
+                )
+                border_draw.arc(
+                    [x - outer_border_r, y - outer_border_r, x + outer_border_r, y + outer_border_r],
+                    start=135, end=405,
+                    fill=border_rgb, width=border_width
+                )
+            else:  # outside
+                # Draw border on outer edge of gauge
+                border_r = int(outer_r)
+                border_draw.arc(
+                    [x - border_r, y - border_r, x + border_r, y + border_r],
+                    start=135, end=405,
+                    fill=border_rgb, width=border_width
+                )
+
+            # Apply border opacity
+            if border_opacity < 100:
+                r, g, b, a = border_layer.split()
+                a = a.point(lambda px: int(px * border_opacity / 100))
+                border_layer = Image.merge('RGBA', (r, g, b, a))
+
+            # Composite border layer onto overlay
+            overlay.alpha_composite(border_layer)
+
         # Draw value text
         value_text = get_value_with_unit(value, element.source, getattr(element, 'temp_hide_unit', False))
         bbox = draw.textbbox((0, 0), value_text, font=font)
