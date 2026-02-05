@@ -141,7 +141,7 @@ class CanvasPreview(QWidget):
 
     def get_animated_value(self, element):
         """Get the display value for a gauge, handling animation if enabled."""
-        target_value = element.value
+        target_value = float(element.value)
 
         if not getattr(element, 'animate_gauge', False):
             return target_value
@@ -151,26 +151,32 @@ class CanvasPreview(QWidget):
 
         if key not in self._animated_values:
             # Initialize with current value
-            self._animated_values[key] = float(target_value)
+            self._animated_values[key] = target_value
             return target_value
 
         current = self._animated_values[key]
-
-        # Use smooth exponential interpolation
-        # Lower factor = smoother animation (0.08 for butter smooth)
-        speed = getattr(element, 'animation_speed', 0.08)
-
-        # Very small threshold for smooth finish
         diff = target_value - current
-        if abs(diff) < 0.01:
-            self._animated_values[key] = float(target_value)
+
+        # Pixel-perfect threshold - stop when difference is negligible
+        if abs(diff) < 0.001:
+            self._animated_values[key] = target_value
             return target_value
 
-        # Smooth interpolation with minimum step to prevent stalling
-        step = diff * speed
-        # Ensure minimum movement to prevent getting stuck
-        if abs(step) < 0.01 and abs(diff) > 0.01:
-            step = 0.01 if diff > 0 else -0.01
+        # Ultra-smooth animation using ease-out cubic
+        # This creates natural deceleration as it approaches target
+        speed = getattr(element, 'animation_speed', 0.05)
+
+        # Ease-out: faster at start, slower near end (feels more natural)
+        # The further from target, the bigger the step
+        t = min(1.0, abs(diff) / 50.0)  # Normalize distance (50% gauge = full speed)
+        eased_speed = speed * (1.0 + t * 2.0)  # Speed up for large changes
+
+        step = diff * eased_speed
+
+        # Minimum step for pixel-by-pixel movement (prevents stalling)
+        min_step = 0.05
+        if abs(step) < min_step and abs(diff) >= 0.001:
+            step = min_step if diff > 0 else -min_step
 
         new_value = current + step
         self._animated_values[key] = new_value

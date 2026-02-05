@@ -53,7 +53,7 @@ class ThemeElement:
         # Gauge options
         self.auto_color_change = kwargs.get("auto_color_change", True)  # Change color at thresholds
         self.animate_gauge = kwargs.get("animate_gauge", False)  # Animate value changes
-        self.animation_speed = kwargs.get("animation_speed", 0.08)  # Animation interpolation speed (0.03-0.2, lower=smoother)
+        self.animation_speed = kwargs.get("animation_speed", 0.05)  # Animation interpolation speed (0.02-0.15, lower=smoother)
 
         # GIF options
         self.gif_path = kwargs.get("gif_path", "")
