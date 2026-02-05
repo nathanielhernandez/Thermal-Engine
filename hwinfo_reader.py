@@ -8,8 +8,25 @@ Reference: https://www.hwinfo.com/forum/threads/shared-memory-layout.5149/
 """
 
 import ctypes
-import mmap
-from ctypes import Structure, c_uint, c_double, c_char, c_uint32, c_uint64
+from ctypes import Structure, c_uint, c_double, c_char, c_uint32, c_uint64, wintypes
+
+# Windows API for shared memory access
+kernel32 = ctypes.windll.kernel32
+
+FILE_MAP_READ = 0x0004
+INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+
+kernel32.OpenFileMappingW.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR]
+kernel32.OpenFileMappingW.restype = wintypes.HANDLE
+
+kernel32.MapViewOfFile.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, ctypes.c_size_t]
+kernel32.MapViewOfFile.restype = ctypes.c_void_p
+
+kernel32.UnmapViewOfFile.argtypes = [ctypes.c_void_p]
+kernel32.UnmapViewOfFile.restype = wintypes.BOOL
+
+kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+kernel32.CloseHandle.restype = wintypes.BOOL
 
 # HWiNFO Shared Memory Constants
 HWINFO_SHARED_MEM_NAME = "Global\\HWiNFO_SENS_SM2"
@@ -78,16 +95,32 @@ class HWiNFOReader:
     """Reads sensor data from HWiNFO shared memory."""
 
     def __init__(self):
-        self.shm = None
+        self.handle = None
+        self.view = None
         self.connected = False
         self.last_error = None
         self._sensor_cache = {}  # Cache sensor name -> index mapping
+        self._view_size = 0
 
     def connect(self):
         """Connect to HWiNFO shared memory."""
         try:
-            # Open the shared memory
-            self.shm = mmap.mmap(-1, 0, HWINFO_SHARED_MEM_NAME, access=mmap.ACCESS_READ)
+            # Open the existing shared memory mapping
+            self.handle = kernel32.OpenFileMappingW(FILE_MAP_READ, False, HWINFO_SHARED_MEM_NAME)
+            if not self.handle:
+                error = ctypes.get_last_error()
+                self.last_error = f"OpenFileMappingW failed (error {error}). Is HWiNFO running with Shared Memory enabled?"
+                return False
+
+            # Map view of the file - map entire region (size=0)
+            self.view = kernel32.MapViewOfFile(self.handle, FILE_MAP_READ, 0, 0, 0)
+            if not self.view:
+                error = ctypes.get_last_error()
+                kernel32.CloseHandle(self.handle)
+                self.handle = None
+                self.last_error = f"MapViewOfFile failed (error {error})"
+                return False
+
             self.connected = True
             self.last_error = None
             self._build_sensor_cache()
@@ -99,12 +132,18 @@ class HWiNFOReader:
 
     def disconnect(self):
         """Disconnect from shared memory."""
-        if self.shm:
+        if self.view:
             try:
-                self.shm.close()
+                kernel32.UnmapViewOfFile(self.view)
             except:
                 pass
-        self.shm = None
+            self.view = None
+        if self.handle:
+            try:
+                kernel32.CloseHandle(self.handle)
+            except:
+                pass
+            self.handle = None
         self.connected = False
         self._sensor_cache = {}
 
@@ -114,34 +153,40 @@ class HWiNFOReader:
             return True
         return self.connect()
 
+    def _read_from_view(self, offset, size):
+        """Read bytes from the memory view at given offset."""
+        return (ctypes.c_char * size).from_address(self.view + offset).raw
+
     def _read_header(self):
         """Read the shared memory header."""
-        if not self.shm:
+        if not self.view:
             return None
-        self.shm.seek(0)
-        header_data = self.shm.read(ctypes.sizeof(HWiNFO_SENSORS_SHARED_MEM_HEADER))
+        header_size = ctypes.sizeof(HWiNFO_SENSORS_SHARED_MEM_HEADER)
+        header_data = self._read_from_view(0, header_size)
         return HWiNFO_SENSORS_SHARED_MEM_HEADER.from_buffer_copy(header_data)
 
     def _read_sensors(self, header):
         """Read all sensor elements."""
         sensors = []
-        self.shm.seek(header.dwOffsetOfSensorSection)
+        offset = header.dwOffsetOfSensorSection
         for i in range(header.dwNumSensorElements):
-            data = self.shm.read(header.dwSizeOfSensorElement)
+            data = self._read_from_view(offset, header.dwSizeOfSensorElement)
             if len(data) >= ctypes.sizeof(HWiNFO_SENSORS_SENSOR_ELEMENT):
                 sensor = HWiNFO_SENSORS_SENSOR_ELEMENT.from_buffer_copy(data)
                 sensors.append(sensor)
+            offset += header.dwSizeOfSensorElement
         return sensors
 
     def _read_readings(self, header):
         """Read all sensor readings."""
         readings = []
-        self.shm.seek(header.dwOffsetOfReadingSection)
+        offset = header.dwOffsetOfReadingSection
         for i in range(header.dwNumReadingElements):
-            data = self.shm.read(header.dwSizeOfReadingElement)
+            data = self._read_from_view(offset, header.dwSizeOfReadingElement)
             if len(data) >= ctypes.sizeof(HWiNFO_SENSORS_READING_ELEMENT):
                 reading = HWiNFO_SENSORS_READING_ELEMENT.from_buffer_copy(data)
                 readings.append(reading)
+            offset += header.dwSizeOfReadingElement
         return readings
 
     def _build_sensor_cache(self):
