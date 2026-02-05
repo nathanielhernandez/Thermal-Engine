@@ -1814,9 +1814,13 @@ class PropertiesPanel(QWidget):
         if value_text_group_visible and not label_text_group_visible:
             self.value_text_group.setFlat(True)
             self.value_text_group.setTitle("")
+            self.value_text_group.setStyleSheet("QGroupBox { border: none; margin: 0; padding: 0; }")
+            self.value_text_group.layout().setContentsMargins(0, 0, 0, 0)
         else:
             self.value_text_group.setFlat(False)
             self.value_text_group.setTitle("Value")
+            self.value_text_group.setStyleSheet("")
+            self.value_text_group.layout().setContentsMargins(8, 8, 8, 8)
         self.label_text_group.setVisible(label_text_group_visible)
 
         # Show all label options for both circle_gauge and bar_gauge
