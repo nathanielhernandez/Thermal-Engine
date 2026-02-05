@@ -60,6 +60,8 @@ ThermalEngine uses **HWiNFO Shared Memory** to read hardware sensors. This appro
 
 > **Tip:** Configure HWiNFO to start with Windows and run minimized to tray. ThermalEngine will automatically connect when HWiNFO becomes available.
 
+> **Note:** The free version of HWiNFO has a **12-hour limit** on Shared Memory Support. After 12 hours, shared memory will be disabled and sensors will stop updating. To restore sensors, restart HWiNFO. For uninterrupted monitoring, consider [HWiNFO Pro](https://www.hwinfo.com/licenses/) which removes this limitation.
+
 ## Installation
 
 ### Download (Recommended)
