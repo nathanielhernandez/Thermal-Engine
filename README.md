@@ -6,6 +6,9 @@ A visual theme editor for **LCD AIO cooler displays** (1280x480). Create custom 
 
 ![Preview](https://img.shields.io/badge/Display-1280x480-blue) ![Python](https://img.shields.io/badge/Python-3.10+-green) ![License](https://img.shields.io/badge/License-MIT-yellow)
 
+<img width="1306" height="732" alt="image" src="https://github.com/user-attachments/assets/d6eafe44-8ea3-4f00-a6bd-2c0b672de1d8" />
+
+
 ## Features
 
 - **Visual drag-and-drop editor** with live preview
