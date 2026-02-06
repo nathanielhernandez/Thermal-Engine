@@ -59,10 +59,10 @@ settings.json
 
 # User themes - only track Default and Analog Clock presets
 presets/*
-!presets/Default.json
-!presets/Default.png
-!presets/Analog Clock.json
-!presets/Analog Clock.png
+!presets/1280x480/
+presets/1280x480/*
+!presets/1280x480/Default/
+!presets/1280x480/Analog Clock/
 
 # Old/backup files
 *_old.py
