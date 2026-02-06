@@ -1,8 +1,9 @@
 """
-TrofeoVisionDevice - Driver for the Thermalright Trofeo Vision (1280x480 JPEG over HID).
+TrofeoVisionDevice - Driver for H-protocol LCD devices (PID 0x5302).
 
 VID: 0x0416  PID: 0x5302
 Protocol: JPEG frames over 512-byte HID packets.
+Resolution is detected dynamically from the init response byte[5] (fbl).
 """
 
 import io
@@ -17,19 +18,40 @@ from devices.base import BaseDevice, FrameFormat
 
 
 class TrofeoVisionDevice(BaseDevice):
-    """Driver for Thermalright Trofeo Vision 1280x480 LCD."""
+    """Driver for H-protocol LCD devices (PID 0x5302).
+
+    Resolution is detected dynamically from init response byte[5] (fbl).
+    Supports Trofeo Vision (1280x480), Burst Assassin Vision (320x240), and others.
+    """
 
     MAGIC = bytes([0xDA, 0xDB, 0xDC, 0xDD])
     PACKET_SIZE = 512
 
+    # fbl (init response byte[5]) -> (width, height)
+    # Sourced from TRCC.exe FormCZTVInit decompilation
+    RESOLUTION_TABLE = {
+        128: (1280, 480),   # Trofeo Vision
+        72:  (480, 480),
+        129: (480, 480),    # remapped from 129 -> 72
+        54:  (360, 360),
+        36:  (240, 240),
+        37:  (240, 240),
+        64:  (640, 480),
+        100: (320, 320),
+        101: (320, 320),
+        102: (320, 320),
+    }
+    DEFAULT_RESOLUTION = (320, 240)  # fallback for unknown fbl values
+
     def __init__(self):
         self._device = None
+        self._width, self._height = 1280, 480
 
     # -- Abstract property implementations --
 
     @property
     def device_name(self) -> str:
-        return "Trofeo Vision"
+        return f"LCD {self._width}x{self._height}"
 
     @property
     def vendor_id(self) -> int:
@@ -41,11 +63,11 @@ class TrofeoVisionDevice(BaseDevice):
 
     @property
     def display_width(self) -> int:
-        return 1280
+        return self._width
 
     @property
     def display_height(self) -> int:
-        return 480
+        return self._height
 
     @property
     def frame_format(self) -> FrameFormat:
@@ -93,6 +115,14 @@ class TrofeoVisionDevice(BaseDevice):
 
         if response:
             self._print_init_response(response)
+            # Detect resolution from fbl (byte[5])
+            if len(response) > 5:
+                fbl = response[5]
+                self._width, self._height = self.RESOLUTION_TABLE.get(
+                    fbl, self.DEFAULT_RESOLUTION
+                )
+                print(f"[{self.device_name}] Detected resolution: "
+                      f"{self._width}x{self._height} (fbl={fbl})")
         else:
             print(f"[{self.device_name}] No init response received")
 
@@ -192,7 +222,10 @@ class TrofeoVisionDevice(BaseDevice):
         header = bytearray(self.PACKET_SIZE)
         header[0:4] = self.MAGIC
         header[4] = 0x02
-        header[8:12] = bytes([0x00, 0x05, 0xE0, 0x01])
+        header[8] = self._width & 0xFF
+        header[9] = (self._width >> 8) & 0xFF
+        header[10] = self._height & 0xFF
+        header[11] = (self._height >> 8) & 0xFF
         header[12] = 0x02
 
         jpeg_len = len(jpeg_data)

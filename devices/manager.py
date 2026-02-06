@@ -103,8 +103,11 @@ class DeviceManager:
             return None
 
         try:
+            print(f"[DeviceManager] Opening {driver.device_name} ({device_key})...")
             driver.open()
+            print(f"[DeviceManager] Device opened, sending init...")
             driver.send_init()
+            print(f"[DeviceManager] Init complete: {driver}")
             self._connected_devices[device_key] = driver
             print(f"[DeviceManager] Connected to {driver}")
             if self.on_connected:

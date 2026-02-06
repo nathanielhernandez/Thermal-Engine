@@ -1477,6 +1477,9 @@ class ThemeEditorWindow(QMainWindow):
                 QMessageBox.warning(self, "Error", "HID library not installed.\nRun: pip install hidapi")
             return False
 
+        print(f"[Connect] Starting connection"
+              f"{f' to {vid:04x}:{pid:04x}' if vid and pid else ''}...")
+
         try:
             if vid is None or pid is None:
                 # Parse preferred device from settings for auto-connect
@@ -1504,6 +1507,7 @@ class ThemeEditorWindow(QMainWindow):
                 return False
 
             device_key = f"{vid:04x}:{pid:04x}"
+            print(f"[Connect] Session setup: {dev} ({dev.display_width}x{dev.display_height})")
 
             # Create or reuse session for this device
             if device_key in self._sessions:
@@ -1544,6 +1548,7 @@ class ThemeEditorWindow(QMainWindow):
             return True
 
         except Exception as e:
+            print(f"[Connect] Error: {e}")
             if show_error:
                 QMessageBox.critical(self, "Error", f"Failed to connect:\n{e}\n\nMake sure TRCC is closed.")
             return False

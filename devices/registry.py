@@ -11,7 +11,7 @@ from devices.dummy import DummyDevice
 
 # Registry of known devices: (vid, pid) -> driver class
 DEVICE_REGISTRY = {
-    (0x0416, 0x5302): TrofeoVisionDevice,   # Thermalright Trofeo Vision (1280x480)
+    (0x0416, 0x5302): TrofeoVisionDevice,   # H-protocol LCD (dynamic resolution)
     (0x0416, 0x5406): AliLcdDevice,          # ALi chipset LCD (stub)
     (0x0416, 0x5408): LianYunDevice,         # LianYun LY chipset LCD (stub)
     (0x0416, 0x5409): LianYunV2Device,       # LianYun V2 LY1 chipset LCD (stub)
