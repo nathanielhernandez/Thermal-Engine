@@ -37,7 +37,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; Main application files (excluding user data folders)
 Source: "dist\ThermalEngine\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "presets\*,elements\*"
 ; User data folders - only install defaults if they don't exist (preserves user customizations)
-Source: "dist\ThermalEngine\presets\*"; DestDir: "{app}\presets"; Flags: onlyifdoesntexist recursesubdirs createallsubdirs
+Source: "dist\ThermalEngine\presets\*"; DestDir: "{app}\presets"; Flags: onlyifdoesntexist recursesubdirs createallsubdirs skipifsourcedoesntexist
 Source: "dist\ThermalEngine\elements\*"; DestDir: "{app}\elements"; Flags: onlyifdoesntexist recursesubdirs createallsubdirs
 
 [Icons]
