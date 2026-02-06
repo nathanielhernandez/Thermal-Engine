@@ -42,30 +42,38 @@ jobs:
           if ($fileVersion -notmatch '^\d+\.\d+\.\d+\.\d+$') {
             $fileVersion = "$fileVersion.0"
           }
-          python -m nuitka `
-            --standalone `
-            --windows-console-mode=disable `
-            --windows-icon-from-ico=assets/icon.ico `
-            --windows-company-name="Thermal Engine" `
-            --windows-product-name="ThermalEngine" `
-            --windows-product-version="$fileVersion" `
-            --windows-file-version="$fileVersion" `
-            --enable-plugin=pyside6 `
-            --include-package=cv2 `
-            --include-package=numpy `
-            --include-package=PIL `
-            --include-package=psutil `
-            --include-package=hid `
-            --include-package=elements `
-            --include-package=devices `
-            --include-data-dir=presets=presets `
-            --include-data-files=elements/*.py=elements/ `
-            --include-data-files=assets/icon.ico=icon.ico `
-            --include-data-files=assets/icon.png=icon.png `
-            --assume-yes-for-downloads `
-            --output-dir=dist `
-            --output-filename=ThermalEngine.exe `
-            main.py
+          # Ensure presets directory exists (may be empty if all presets are gitignored)
+          if (-not (Test-Path "presets")) { New-Item -ItemType Directory -Path "presets" | Out-Null }
+
+          # Build Nuitka args — conditionally include presets if non-empty
+          $nuitkaArgs = @(
+            "--standalone",
+            "--windows-console-mode=disable",
+            "--windows-icon-from-ico=assets/icon.ico",
+            "--windows-company-name=Thermal Engine",
+            "--windows-product-name=ThermalEngine",
+            "--windows-product-version=$fileVersion",
+            "--windows-file-version=$fileVersion",
+            "--enable-plugin=pyside6",
+            "--include-package=cv2",
+            "--include-package=numpy",
+            "--include-package=PIL",
+            "--include-package=psutil",
+            "--include-package=hid",
+            "--include-package=elements",
+            "--include-package=devices",
+            "--include-data-files=elements/*.py=elements/",
+            "--include-data-files=assets/icon.ico=icon.ico",
+            "--include-data-files=assets/icon.png=icon.png",
+            "--assume-yes-for-downloads",
+            "--output-dir=dist",
+            "--output-filename=ThermalEngine.exe"
+          )
+          if ((Get-ChildItem "presets" -File | Measure-Object).Count -gt 0) {
+            $nuitkaArgs += "--include-data-dir=presets=presets"
+          }
+
+          python -m nuitka @nuitkaArgs main.py
 
           # Verify data directories were included
           Write-Host "=== Checking data directories ==="
@@ -79,8 +87,7 @@ jobs:
           if (Test-Path "dist\main.dist\presets") {
             Write-Host "presets folder exists"
           } else {
-            Write-Host "ERROR: presets folder missing!"
-            exit 1
+            Write-Host "presets folder not included (no preset files in source)"
           }
 
           # Rename output folder to match expected structure
