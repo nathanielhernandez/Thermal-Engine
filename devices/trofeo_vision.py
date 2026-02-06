@@ -7,6 +7,7 @@ Resolution is detected dynamically from the init response byte[5] (fbl).
 """
 
 import io
+import time
 
 try:
     import hid
@@ -45,6 +46,7 @@ class TrofeoVisionDevice(BaseDevice):
 
     def __init__(self):
         self._device = None
+        self._interfaces = []
         self._width, self._height = 1280, 480
 
     # -- Abstract property implementations --
@@ -78,8 +80,33 @@ class TrofeoVisionDevice(BaseDevice):
     def open(self):
         if not HAS_HID:
             raise RuntimeError("hidapi library not installed (pip install hidapi)")
+
+        # Enumerate all HID interfaces for this VID:PID
+        self._interfaces = hid.enumerate(self.vendor_id, self.product_id)
+        if not self._interfaces:
+            raise IOError(f"No HID interfaces found for "
+                          f"{self.vendor_id:#06x}:{self.product_id:#06x}")
+
+        print(f"[{self.device_name}] Found {len(self._interfaces)} HID interface(s):")
+        for i, iface in enumerate(self._interfaces):
+            iface_num = iface.get('interface_number', 'N/A')
+            usage_page = iface.get('usage_page', 0)
+            usage = iface.get('usage', 0)
+            mfg = iface.get('manufacturer_string', 'N/A')
+            prod = iface.get('product_string', 'N/A')
+            path = iface.get('path', b'')
+            if isinstance(path, bytes):
+                path = path.decode('utf-8', errors='replace')
+            print(f"[{self.device_name}]   #{i}: iface={iface_num} "
+                  f"usage_page={usage_page:#06x} usage={usage:#06x} "
+                  f"mfg='{mfg}' prod='{prod}'")
+            print(f"[{self.device_name}]       path={path}")
+
+        # Open the first interface (send_init will try others if needed)
+        path = self._interfaces[0]['path']
         self._device = hid.device()
-        self._device.open(self.vendor_id, self.product_id)
+        self._device.open_path(path)
+        print(f"[{self.device_name}] Opened interface #0")
 
     def close(self):
         if self._device:
@@ -91,40 +118,81 @@ class TrofeoVisionDevice(BaseDevice):
                 self._device = None
 
     def send_init(self):
-        """Send the Trofeo Vision initialization packet and read device info."""
+        """Send init packet and read device info, trying each HID interface."""
         if not self._device:
             raise IOError("Device not open")
-        init = bytearray(self.PACKET_SIZE)
-        init[0:4] = self.MAGIC
-        init[4] = 0x00
-        init[12] = 0x01
-        self._device.write(bytes([0x00]) + bytes(init))
 
-        # Read init response (non-blocking, up to 2s)
-        import time
-        self._device.set_nonblocking(1)
-        deadline = time.monotonic() + 2.0
-        response = None
-        while time.monotonic() < deadline:
-            data = self._device.read(self.PACKET_SIZE)
-            if data:
-                response = bytes(data)
-                break
-            time.sleep(0.05)
-        self._device.set_nonblocking(0)
+        for i, iface in enumerate(self._interfaces):
+            iface_num = iface.get('interface_number', '?')
 
-        if response:
-            self._print_init_response(response)
-            # Detect resolution from fbl (byte[5])
-            if len(response) > 5:
-                fbl = response[5]
-                self._width, self._height = self.RESOLUTION_TABLE.get(
-                    fbl, self.DEFAULT_RESOLUTION
-                )
-                print(f"[{self.device_name}] Detected resolution: "
-                      f"{self._width}x{self._height} (fbl={fbl})")
-        else:
-            print(f"[{self.device_name}] No init response received")
+            # Switch to this interface (skip re-open for #0, already open)
+            if i > 0:
+                print(f"[{self.device_name}] Switching to interface #{i} "
+                      f"(iface={iface_num})...")
+                try:
+                    self._device.close()
+                except Exception:
+                    pass
+                self._device = hid.device()
+                try:
+                    self._device.open_path(iface['path'])
+                except Exception as e:
+                    print(f"[{self.device_name}]   Failed to open: {e}")
+                    continue
+
+            print(f"[{self.device_name}] Sending init on interface #{i} "
+                  f"(iface={iface_num})...")
+
+            # Build and send init packet
+            init = bytearray(self.PACKET_SIZE)
+            init[0:4] = self.MAGIC
+            init[4] = 0x00
+            init[12] = 0x01
+
+            try:
+                self._device.write(bytes([0x00]) + bytes(init))
+            except Exception as e:
+                print(f"[{self.device_name}]   Write failed: {e}")
+                continue
+
+            # Read init response (non-blocking, up to 2s)
+            self._device.set_nonblocking(1)
+            deadline = time.monotonic() + 2.0
+            response = None
+            while time.monotonic() < deadline:
+                data = self._device.read(self.PACKET_SIZE)
+                if data:
+                    response = bytes(data)
+                    break
+                time.sleep(0.05)
+            self._device.set_nonblocking(0)
+
+            if response:
+                self._print_init_response(response)
+                # Detect resolution from fbl (byte[5])
+                if len(response) > 5:
+                    fbl = response[5]
+                    self._width, self._height = self.RESOLUTION_TABLE.get(
+                        fbl, self.DEFAULT_RESOLUTION
+                    )
+                    print(f"[{self.device_name}] Detected resolution: "
+                          f"{self._width}x{self._height} (fbl={fbl})")
+                print(f"[{self.device_name}] Using interface #{i}")
+                return  # Success
+            else:
+                print(f"[{self.device_name}]   No response on interface #{i}")
+
+        # No interface responded — fall back to first interface for frame sending
+        print(f"[{self.device_name}] No init response from any of "
+              f"{len(self._interfaces)} interface(s)")
+        if len(self._interfaces) > 1:
+            print(f"[{self.device_name}] Falling back to interface #0")
+            try:
+                self._device.close()
+            except Exception:
+                pass
+            self._device = hid.device()
+            self._device.open_path(self._interfaces[0]['path'])
 
     @staticmethod
     def _decode_init_response(response):
