@@ -48,7 +48,7 @@ jobs:
             --windows-icon-from-ico=assets/icon.ico `
             --windows-company-name="Thermal Engine" `
             --windows-product-name="ThermalEngine" `
-            --windows-product-version="$version" `
+            --windows-product-version="$fileVersion" `
             --windows-file-version="$fileVersion" `
             --enable-plugin=pyside6 `
             --include-package=cv2 `
