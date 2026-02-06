@@ -37,6 +37,11 @@ jobs:
       - name: Build with Nuitka
         run: |
           $version = "${{ steps.version.outputs.VERSION }}".TrimStart('v')
+          # Strip pre-release suffix for Windows file version (must be numeric X.Y.Z.W)
+          $fileVersion = ($version -replace '-.*$', '')
+          if ($fileVersion -notmatch '^\d+\.\d+\.\d+\.\d+$') {
+            $fileVersion = "$fileVersion.0"
+          }
           python -m nuitka `
             --standalone `
             --windows-console-mode=disable `
@@ -44,7 +49,7 @@ jobs:
             --windows-company-name="Thermal Engine" `
             --windows-product-name="ThermalEngine" `
             --windows-product-version="$version" `
-            --windows-file-version="$version" `
+            --windows-file-version="$fileVersion" `
             --enable-plugin=pyside6 `
             --include-package=cv2 `
             --include-package=numpy `
@@ -52,6 +57,7 @@ jobs:
             --include-package=psutil `
             --include-package=hid `
             --include-package=elements `
+            --include-package=devices `
             --include-data-dir=presets=presets `
             --include-data-files=elements/*.py=elements/ `
             --include-data-files=assets/icon.ico=icon.ico `
