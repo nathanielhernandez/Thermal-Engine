@@ -9,9 +9,10 @@ from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import Qt, QPointF, QRectF, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QBrush, QFont, QPixmap, QImage
 
-from constants import DISPLAY_WIDTH, DISPLAY_HEIGHT, PREVIEW_SCALE, SOURCE_UNITS
+import constants
+from constants import PREVIEW_SCALE, SOURCE_UNITS
 from elements import get_custom_element
-from video_background import video_background
+from video_background import VideoBackground
 
 
 def apply_opacity(color, opacity):
@@ -128,13 +129,29 @@ class CanvasPreview(QWidget):
         self._glass_cache_valid = False  # Track if glass cache needs rebuild
         self._has_glass_cache = None  # Cache result of _has_glass_elements()
         self._animated_values = {}  # Track display values for animated gauges {element_name: current_display_value}
+        self._video_bg = None  # VideoBackground instance, set via set_video_background()
 
         self.setFixedSize(
-            int(DISPLAY_WIDTH * self.scale),
-            int(DISPLAY_HEIGHT * self.scale)
+            int(constants.DISPLAY_WIDTH * self.scale),
+            int(constants.DISPLAY_HEIGHT * self.scale)
         )
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)  # Enable keyboard input
+
+    def update_display_size(self):
+        """Resize canvas to match current display resolution."""
+        self.setFixedSize(
+            int(constants.DISPLAY_WIDTH * self.scale),
+            int(constants.DISPLAY_HEIGHT * self.scale)
+        )
+        self._glass_cache_valid = False
+        self.update()
+
+    def set_video_background(self, video_bg):
+        """Set the VideoBackground instance for this canvas."""
+        self._video_bg = video_bg
+        self._glass_cache_valid = False
+        self.update()
 
     def set_elements(self, elements):
         self.elements = elements
@@ -238,8 +255,8 @@ class CanvasPreview(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         # Draw video background if enabled, otherwise solid color
-        if video_background.enabled:
-            pixmap = video_background.get_frame_qpixmap(self.scale)
+        if self._video_bg and self._video_bg.enabled:
+            pixmap = self._video_bg.get_frame_qpixmap(self.scale)
             if pixmap:
                 painter.drawPixmap(0, 0, pixmap)
             else:
@@ -262,7 +279,7 @@ class CanvasPreview(QWidget):
         # If we have glass elements, pre-render the background for blur
         # Only rebuild if cache is invalid or video is playing (video changes every frame)
         if self._has_glass_elements():
-            needs_rebuild = not self._glass_cache_valid or video_background.enabled
+            needs_rebuild = not self._glass_cache_valid or (self._video_bg and self._video_bg.enabled)
             if needs_rebuild or self._glass_background is None:
                 self._glass_background = self._render_background_for_glass()
                 self._glass_cache_valid = True
@@ -273,8 +290,8 @@ class CanvasPreview(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         # Draw video background if enabled, otherwise solid color
-        if video_background.enabled:
-            pixmap = video_background.get_frame_qpixmap(self.scale)
+        if self._video_bg and self._video_bg.enabled:
+            pixmap = self._video_bg.get_frame_qpixmap(self.scale)
             if pixmap:
                 painter.drawPixmap(0, 0, pixmap)
             else:
@@ -1473,8 +1490,8 @@ class CanvasPreview(QWidget):
                     start_x, start_y = self.drag_start_positions[idx]
                     new_x = int(start_x + dx)
                     new_y = int(start_y + dy)
-                    new_x = max(0, min(new_x, DISPLAY_WIDTH - 50))
-                    new_y = max(0, min(new_y, DISPLAY_HEIGHT - 50))
+                    new_x = max(0, min(new_x, constants.DISPLAY_WIDTH - 50))
+                    new_y = max(0, min(new_y, constants.DISPLAY_HEIGHT - 50))
                     self.elements[idx].x = new_x
                     self.elements[idx].y = new_y
 

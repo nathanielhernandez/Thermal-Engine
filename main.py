@@ -150,6 +150,7 @@ def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Thermal Engine')
     parser.add_argument('--minimized', action='store_true', help='Start minimized to system tray')
+    parser.add_argument('--test', action='store_true', help='Add a virtual test device (no USB required)')
     args = parser.parse_args()
 
     app = QApplication(sys.argv)
@@ -186,6 +187,15 @@ def main():
 
     # Create main window
     window = ThemeEditorWindow()
+
+    # Inject virtual test device into scan results
+    if args.test:
+        real_enumerate = window.device_manager.enumerate_devices
+        dummy_entry = {
+            "vid": 0xFFFF, "pid": 0x0001,
+            "name": "Dummy (Test)", "width": 480, "height": 480, "path": b"",
+        }
+        window.device_manager.enumerate_devices = lambda: [dummy_entry] + real_enumerate()
 
     # Register cleanup handlers to ensure HID device is released on any exit
     def cleanup_on_exit():

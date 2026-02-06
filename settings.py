@@ -25,9 +25,11 @@ DEFAULT_SETTINGS = {
     "minimize_to_tray": True,
     "close_to_tray": True,
     "target_fps": 30,  # 30 FPS is smooth for most PCs
-    "default_preset": None,  # Name of preset to load on startup
+    "default_preset": None,  # Name of preset to load on startup (legacy fallback)
+    "default_presets": {},  # Per-resolution defaults: {"WxH": "preset_name"}
     "overdrive_mode": False,
     "suppress_60fps_warning": False,  # Show warning when selecting 60 FPS
+    "preferred_device": None,  # VID:PID of preferred device (e.g. "0416:5302")
 }
 
 _settings = None

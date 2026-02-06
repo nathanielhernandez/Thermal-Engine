@@ -2,10 +2,17 @@
 Constants and configuration for Thermal Engine.
 """
 
-# Display dimensions
+# Display dimensions (mutable — updated at runtime when a device connects)
 DISPLAY_WIDTH = 1280
 DISPLAY_HEIGHT = 480
 PREVIEW_SCALE = 0.5
+
+
+def set_display_resolution(width, height):
+    """Update the global display resolution (called when a device connects)."""
+    global DISPLAY_WIDTH, DISPLAY_HEIGHT
+    DISPLAY_WIDTH = width
+    DISPLAY_HEIGHT = height
 
 # HID Device settings
 VENDOR_ID = 0x35CC

@@ -547,7 +547,8 @@ class GradientBarEditor(QWidget):
         return "#ffffff"
 
 
-from constants import DISPLAY_WIDTH, DISPLAY_HEIGHT, DATA_SOURCES, DATA_SOURCES_CATEGORIZED
+import constants
+from constants import DATA_SOURCES, DATA_SOURCES_CATEGORIZED
 
 
 class FontPreviewDelegate(QStyledItemDelegate):
@@ -759,7 +760,7 @@ class PropertiesPanel(QWidget):
         position_layout.setSpacing(8)
 
         self.x_spin = NoScrollSpinBox()
-        self.x_spin.setRange(0, DISPLAY_WIDTH)
+        self.x_spin.setRange(0, constants.DISPLAY_WIDTH)
         self.x_spin.valueChanged.connect(self.on_property_changed)
         x_container = QHBoxLayout()
         x_container.setSpacing(4)
@@ -769,7 +770,7 @@ class PropertiesPanel(QWidget):
         position_layout.addLayout(x_container)
 
         self.y_spin = NoScrollSpinBox()
-        self.y_spin.setRange(0, DISPLAY_HEIGHT)
+        self.y_spin.setRange(0, constants.DISPLAY_HEIGHT)
         self.y_spin.valueChanged.connect(self.on_property_changed)
         y_container = QHBoxLayout()
         y_container.setSpacing(4)
@@ -788,7 +789,7 @@ class PropertiesPanel(QWidget):
         size_layout.setSpacing(8)
 
         self.width_spin = NoScrollSpinBox()
-        self.width_spin.setRange(10, DISPLAY_WIDTH)
+        self.width_spin.setRange(10, constants.DISPLAY_WIDTH)
         self.width_spin.valueChanged.connect(self.on_property_changed)
         w_container = QHBoxLayout()
         w_container.setSpacing(4)
@@ -798,7 +799,7 @@ class PropertiesPanel(QWidget):
         size_layout.addLayout(w_container)
 
         self.height_spin = NoScrollSpinBox()
-        self.height_spin.setRange(10, DISPLAY_HEIGHT)
+        self.height_spin.setRange(10, constants.DISPLAY_HEIGHT)
         self.height_spin.valueChanged.connect(self.on_property_changed)
         h_container = QHBoxLayout()
         h_container.setSpacing(4)
@@ -1403,7 +1404,7 @@ class PropertiesPanel(QWidget):
         multi_position_layout.setSpacing(8)
 
         self.multi_x_spin = NoScrollSpinBox()
-        self.multi_x_spin.setRange(-1000, DISPLAY_WIDTH + 1000)
+        self.multi_x_spin.setRange(-1000, constants.DISPLAY_WIDTH + 1000)
         self.multi_x_spin.valueChanged.connect(self.on_multi_transform_changed)
         multi_x_container = QHBoxLayout()
         multi_x_container.setSpacing(4)
@@ -1413,7 +1414,7 @@ class PropertiesPanel(QWidget):
         multi_position_layout.addLayout(multi_x_container)
 
         self.multi_y_spin = NoScrollSpinBox()
-        self.multi_y_spin.setRange(-1000, DISPLAY_HEIGHT + 1000)
+        self.multi_y_spin.setRange(-1000, constants.DISPLAY_HEIGHT + 1000)
         self.multi_y_spin.valueChanged.connect(self.on_multi_transform_changed)
         multi_y_container = QHBoxLayout()
         multi_y_container.setSpacing(4)
@@ -1431,7 +1432,7 @@ class PropertiesPanel(QWidget):
         multi_size_layout.setSpacing(8)
 
         self.multi_w_spin = NoScrollSpinBox()
-        self.multi_w_spin.setRange(1, DISPLAY_WIDTH * 2)
+        self.multi_w_spin.setRange(1, constants.DISPLAY_WIDTH * 2)
         self.multi_w_spin.valueChanged.connect(self.on_multi_size_changed)
         multi_w_container = QHBoxLayout()
         multi_w_container.setSpacing(4)
@@ -1441,7 +1442,7 @@ class PropertiesPanel(QWidget):
         multi_size_layout.addLayout(multi_w_container)
 
         self.multi_h_spin = NoScrollSpinBox()
-        self.multi_h_spin.setRange(1, DISPLAY_HEIGHT * 2)
+        self.multi_h_spin.setRange(1, constants.DISPLAY_HEIGHT * 2)
         self.multi_h_spin.valueChanged.connect(self.on_multi_size_changed)
         multi_h_container = QHBoxLayout()
         multi_h_container.setSpacing(4)
@@ -2582,8 +2583,8 @@ class PropertiesPanel(QWidget):
                     img_width, img_height = gif.size
 
                     # Set dimensions (capped at display size)
-                    max_width = min(img_width, DISPLAY_WIDTH)
-                    max_height = min(img_height, DISPLAY_HEIGHT)
+                    max_width = min(img_width, constants.DISPLAY_WIDTH)
+                    max_height = min(img_height, constants.DISPLAY_HEIGHT)
 
                     if img_width > max_width or img_height > max_height:
                         scale = min(max_width / img_width, max_height / img_height)
@@ -2624,8 +2625,8 @@ class PropertiesPanel(QWidget):
                         self.current_element.aspect_ratio = 1.0
 
                     # Set dimensions to match image (capped at display size)
-                    max_width = min(img_width, DISPLAY_WIDTH)
-                    max_height = min(img_height, DISPLAY_HEIGHT)
+                    max_width = min(img_width, constants.DISPLAY_WIDTH)
+                    max_height = min(img_height, constants.DISPLAY_HEIGHT)
 
                     # Scale down if too large while maintaining aspect ratio
                     if img_width > max_width or img_height > max_height:

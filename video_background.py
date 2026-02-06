@@ -20,7 +20,7 @@ except ImportError:
     cv2 = None
     np = None
 
-from constants import DISPLAY_WIDTH, DISPLAY_HEIGHT
+import constants
 
 
 class VideoBackground:
@@ -159,13 +159,13 @@ class VideoBackground:
                 )
 
                 # Create output frame with black background
-                output = np.zeros((DISPLAY_HEIGHT, DISPLAY_WIDTH, 3), dtype=np.uint8)
+                output = np.zeros((constants.DISPLAY_HEIGHT, constants.DISPLAY_WIDTH, 3), dtype=np.uint8)
 
                 # Calculate paste region (handle negative offsets for fit_width)
                 y_start = max(0, y_offset)
-                y_end = min(DISPLAY_HEIGHT, y_offset + new_height)
+                y_end = min(constants.DISPLAY_HEIGHT, y_offset + new_height)
                 x_start = max(0, x_offset)
-                x_end = min(DISPLAY_WIDTH, x_offset + new_width)
+                x_end = min(constants.DISPLAY_WIDTH, x_offset + new_width)
 
                 # Source region from resized frame
                 src_y_start = max(0, -y_offset)
@@ -215,24 +215,24 @@ class VideoBackground:
     def _calculate_dimensions(self):
         """Calculate the scaled dimensions based on fit mode."""
         if self._video_width == 0 or self._video_height == 0:
-            return DISPLAY_WIDTH, DISPLAY_HEIGHT, 0, 0
+            return constants.DISPLAY_WIDTH, constants.DISPLAY_HEIGHT, 0, 0
 
         aspect_ratio = self._video_width / self._video_height
 
         if self.fit_mode == self.FIT_HEIGHT:
             # Scale so video height matches display height
-            new_height = DISPLAY_HEIGHT
+            new_height = constants.DISPLAY_HEIGHT
             new_width = int(new_height * aspect_ratio)
             # Center horizontally
-            x_offset = (DISPLAY_WIDTH - new_width) // 2
+            x_offset = (constants.DISPLAY_WIDTH - new_width) // 2
             y_offset = 0
         else:  # FIT_WIDTH
             # Scale so video width matches display width
-            new_width = DISPLAY_WIDTH
+            new_width = constants.DISPLAY_WIDTH
             new_height = int(new_width / aspect_ratio)
             # Center vertically
             x_offset = 0
-            y_offset = (DISPLAY_HEIGHT - new_height) // 2
+            y_offset = (constants.DISPLAY_HEIGHT - new_height) // 2
 
         return new_width, new_height, x_offset, y_offset
 
@@ -337,8 +337,8 @@ class VideoBackground:
 
             # Scale if needed
             if scale != 1.0:
-                scaled_width = int(DISPLAY_WIDTH * scale)
-                scaled_height = int(DISPLAY_HEIGHT * scale)
+                scaled_width = int(constants.DISPLAY_WIDTH * scale)
+                scaled_height = int(constants.DISPLAY_HEIGHT * scale)
                 frame = cv2.resize(frame, (scaled_width, scaled_height), interpolation=cv2.INTER_LINEAR)
 
             height, width, channels = frame.shape
@@ -365,8 +365,8 @@ class VideoBackground:
         from PySide6.QtGui import QPixmap, QPainter, QColor, QFont
         from PySide6.QtCore import Qt
 
-        width = int(DISPLAY_WIDTH * scale)
-        height = int(DISPLAY_HEIGHT * scale)
+        width = int(constants.DISPLAY_WIDTH * scale)
+        height = int(constants.DISPLAY_HEIGHT * scale)
 
         pixmap = QPixmap(width, height)
         pixmap.fill(QColor(15, 15, 25))
@@ -420,8 +420,8 @@ class VideoBackground:
         """Estimate memory usage in MB."""
         if not self._frame_buffer:
             return 0
-        # Each frame is DISPLAY_WIDTH x DISPLAY_HEIGHT x 3 bytes
-        frame_size = DISPLAY_WIDTH * DISPLAY_HEIGHT * 3
+        # Each frame is constants.DISPLAY_WIDTH x constants.DISPLAY_HEIGHT x 3 bytes
+        frame_size = constants.DISPLAY_WIDTH * constants.DISPLAY_HEIGHT * 3
         return (len(self._frame_buffer) * frame_size) / (1024 * 1024)
 
     def to_dict(self):
@@ -444,7 +444,3 @@ class VideoBackground:
     def close(self):
         """Release all resources."""
         self.clear_video()
-
-
-# Global instance
-video_background = VideoBackground()

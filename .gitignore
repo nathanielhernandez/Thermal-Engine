@@ -40,6 +40,7 @@ env/
 # Local config
 .ai/
 .claude/
+context.txt
 
 
 # OS files

@@ -25,6 +25,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer, QByteArray, Signal, QObject
 from PySide6.QtGui import QColor, QAction, QKeySequence, QIcon, QTextCursor, QFont
 
+from device_panel import DevicePanel
+
 
 class ConsoleOutputStream(QObject):
     """Stream that captures output and emits signals for GUI display."""
@@ -249,7 +251,9 @@ try:
 except ImportError:
     HAS_HID = False
 
-from constants import DISPLAY_WIDTH, DISPLAY_HEIGHT, SOURCE_UNITS
+import constants
+from constants import SOURCE_UNITS
+from devices import DeviceManager
 
 
 def get_value_with_unit(value, source, temp_hide_unit=False):
@@ -294,19 +298,23 @@ from properties import PropertiesPanel
 from element_list import ElementListPanel
 from presets import PresetsPanel
 from elements import get_custom_element
-from video_background import video_background, HAS_CV2
+from video_background import VideoBackground, HAS_CV2
+from editor_session import EditorSession
 
 
 class ThemeEditorWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.theme_path = None
-        self.theme_name = "Untitled Theme"
-        self.background_color = "#0f0f19"
-        self.elements = []
-        self.device = None
+        self.device_manager = DeviceManager()
         self.live_preview_timer = None
         self.target_fps = settings.get_setting("target_fps", 30)
+
+        # -- Session management --
+        # Offline session is the default when no device is connected
+        offline = EditorSession(device=None, resolution=(1280, 480))
+        self._sessions = {"offline": offline}
+        self._active_session = offline
 
         # Performance monitoring
         self.frame_times = []
@@ -314,9 +322,7 @@ class ThemeEditorWindow(QMainWindow):
         self.perf_update_timer = None
         self.process = psutil.Process()
 
-        # Undo/Redo stacks
-        self.undo_stack = []
-        self.redo_stack = []
+        # Undo/Redo
         self.max_undo_levels = 50
 
         # Canvas update throttling (skip canvas updates during high-speed rendering)
@@ -327,8 +333,6 @@ class ThemeEditorWindow(QMainWindow):
         self._frame_deadline = 0  # When next frame should be sent
         self._frames_skipped = 0  # Counter for skipped frames
         self._overdrive_mode = settings.get_setting("overdrive_mode", False)
-        self._frame_buffer = None  # Pre-rendered frame buffer
-        self._frame_buffer_lock = threading.Lock()
         self._render_thread = None
         self._render_thread_running = False
 
@@ -349,11 +353,50 @@ class ThemeEditorWindow(QMainWindow):
         self.add_default_elements()
         self.setup_performance_monitor()
 
-        # Load default preset if one is set
-        self.load_default_preset_on_startup()
-
         # Auto-connect to display after window is shown
         QTimer.singleShot(500, self.auto_connect)
+
+    # -- Delegation properties: forward to active session --
+
+    @property
+    def elements(self):
+        return self._active_session.elements
+
+    @elements.setter
+    def elements(self, value):
+        self._active_session.elements = value
+
+    @property
+    def background_color(self):
+        return self._active_session.background_color
+
+    @background_color.setter
+    def background_color(self, value):
+        self._active_session.background_color = value
+
+    @property
+    def theme_name(self):
+        return self._active_session.theme_name
+
+    @theme_name.setter
+    def theme_name(self, value):
+        self._active_session.theme_name = value
+
+    @property
+    def undo_stack(self):
+        return self._active_session.undo_stack
+
+    @undo_stack.setter
+    def undo_stack(self, value):
+        self._active_session.undo_stack = value
+
+    @property
+    def redo_stack(self):
+        return self._active_session.redo_stack
+
+    @redo_stack.setter
+    def redo_stack(self, value):
+        self._active_session.redo_stack = value
 
     def auto_connect(self):
         """Attempt to connect to display automatically on startup."""
@@ -361,6 +404,9 @@ class ThemeEditorWindow(QMainWindow):
             self.status_bar.showMessage("Auto-connected to display")
         else:
             self.status_bar.showMessage("Display not found - click Connect when ready")
+
+        # Load default preset after device connection (so resolution filter is set)
+        self.load_default_preset_on_startup()
 
     def nativeEvent(self, eventType, message):
         """Handle native Windows events for sleep/wake detection."""
@@ -382,7 +428,8 @@ class ThemeEditorWindow(QMainWindow):
     def _handle_system_sleep(self):
         """Handle system going to sleep."""
         print("[Power] System going to sleep")
-        self._was_connected_before_sleep = self.device is not None
+        self._was_connected_before_sleep = self.device_manager.is_connected
+        self.device_manager.notify_sleep()
         # Stop reconnect timer if running
         if self._reconnect_timer:
             self._reconnect_timer.stop()
@@ -394,7 +441,8 @@ class ThemeEditorWindow(QMainWindow):
         self._last_wake_time = time.time()
 
         # Reset video background timing to prevent frame jumps
-        video_background.reset_timing()
+        for session in self._sessions.values():
+            session.video_bg.reset_timing()
 
         # Reset GIF playback timing
         try:
@@ -409,13 +457,9 @@ class ThemeEditorWindow(QMainWindow):
 
         # If we were connected before sleep, try to reconnect
         if self._was_connected_before_sleep:
-            # Disconnect cleanly first (device is likely invalid)
-            if self.device:
-                try:
-                    self.device.close()
-                except:
-                    pass
-                self.device = None
+            # Disconnect cleanly first (devices are likely invalid)
+            self.disconnect_display()
+            self.device_manager.notify_wake()
 
             # Start reconnection attempts after a short delay
             self._reconnect_attempts = 0
@@ -471,9 +515,9 @@ class ThemeEditorWindow(QMainWindow):
             # Load video background settings if present
             video_data = default_preset_data.get("video_background", {})
             if video_data:
-                video_background.from_dict(video_data)
+                self._active_session.video_bg.from_dict(video_data)
             else:
-                video_background.clear_video()
+                self._active_session.video_bg.clear_video()
             self._update_video_ui()
 
             print(f"[Startup] Loaded default preset: {self.theme_name}")
@@ -491,6 +535,12 @@ class ThemeEditorWindow(QMainWindow):
         self.setCentralWidget(central)
 
         main_layout = QHBoxLayout(central)
+        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Device sidebar panel (far left)
+        self.device_panel = DevicePanel(self.device_manager)
+        main_layout.addWidget(self.device_panel)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
@@ -553,6 +603,7 @@ class ThemeEditorWindow(QMainWindow):
         canvas_layout.addLayout(name_layout)
 
         self.canvas = CanvasPreview()
+        self.canvas.set_video_background(self._active_session.video_bg)
 
         canvas_wrapper = QHBoxLayout()
         canvas_wrapper.addStretch()
@@ -585,8 +636,23 @@ class ThemeEditorWindow(QMainWindow):
         self.perf_label = QLabel("FPS: -- | CPU: --%")
         self.perf_label.setStyleSheet("padding: 2px 8px;")
 
+        self.device_label = QLabel("No Device")
+        self.device_label.setStyleSheet("padding: 2px 8px; color: #888;")
+
+        self.status_bar.addPermanentWidget(self.device_label)
         self.status_bar.addPermanentWidget(self.perf_indicator)
         self.status_bar.addPermanentWidget(self.perf_label)
+
+    def _update_device_label(self):
+        """Update the device name label in the status bar."""
+        session = self._active_session
+        if session.device is not None:
+            dev = session.device
+            self.device_label.setText(f"{dev.device_name} ({dev.display_width}x{dev.display_height})")
+            self.device_label.setStyleSheet("padding: 2px 8px; color: #4CAF50;")
+        else:
+            self.device_label.setText("No Device")
+            self.device_label.setStyleSheet("padding: 2px 8px; color: #888;")
 
     def setup_console(self):
         """Setup console output capture and window."""
@@ -667,6 +733,14 @@ class ThemeEditorWindow(QMainWindow):
         self.connect_action.triggered.connect(self.toggle_connection)
         display_menu.addAction(self.connect_action)
 
+        # Device selection submenu
+        self.device_menu = display_menu.addMenu("Select Device")
+        self.device_menu.aboutToShow.connect(self._populate_device_menu)
+
+        refresh_devices_action = QAction("Refresh Devices", self)
+        refresh_devices_action.triggered.connect(self._refresh_devices)
+        display_menu.addAction(refresh_devices_action)
+
         display_menu.addSeparator()
 
         self.send_action = QAction("Send to Display", self)
@@ -737,6 +811,10 @@ class ThemeEditorWindow(QMainWindow):
         self.presets_panel.preset_selected.connect(self.load_preset)
         self.presets_panel.preset_saved.connect(self.on_preset_saved)
 
+        self.device_panel.connect_requested.connect(self._on_device_panel_connect)
+        self.device_panel.disconnect_requested.connect(self._on_device_panel_disconnect)
+        self.device_panel.device_selected.connect(self._on_device_panel_selected)
+
     def setup_performance_monitor(self):
         """Setup timer to update performance stats."""
         self.perf_update_timer = QTimer(self)
@@ -759,7 +837,7 @@ class ThemeEditorWindow(QMainWindow):
             cpu_percent = 0
 
         # Determine status color based on performance
-        if not self.device:
+        if not self.device_manager.is_connected:
             color = "#444"
             status = "Idle"
         elif actual_fps >= self.target_fps * 0.9:
@@ -783,7 +861,7 @@ class ThemeEditorWindow(QMainWindow):
         except:
             mem_str = ""
 
-        if self.device:
+        if self.device_manager.is_connected:
             mode_str = " [OD]" if self._overdrive_mode else ""
             skip_str = f" Skip:{self._frames_skipped}" if self._overdrive_mode and self._frames_skipped > 0 else ""
             self.perf_label.setText(
@@ -795,7 +873,7 @@ class ThemeEditorWindow(QMainWindow):
         else:
             self.perf_label.setText(f"FPS: -- | CPU: --%{mem_str}")
 
-        if self.device and actual_fps < self.target_fps * 0.7 and actual_fps > 0:
+        if self.device_manager.is_connected and actual_fps < self.target_fps * 0.7 and actual_fps > 0:
             self.status_bar.showMessage(
                 f"Performance warning: Only achieving {actual_fps:.1f} FPS. "
                 f"Consider reducing target FPS or simplifying theme.", 3000
@@ -969,6 +1047,20 @@ class ThemeEditorWindow(QMainWindow):
 
     def load_preset(self, preset_data):
         """Load a preset into the editor."""
+        # Warn if preset resolution doesn't match current display
+        preset_w = preset_data.get("display_width", constants.DISPLAY_WIDTH)
+        preset_h = preset_data.get("display_height", constants.DISPLAY_HEIGHT)
+        if preset_w != constants.DISPLAY_WIDTH or preset_h != constants.DISPLAY_HEIGHT:
+            reply = QMessageBox.question(
+                self, "Resolution Mismatch",
+                f"This preset was made for {preset_w}x{preset_h} but the current "
+                f"display is {constants.DISPLAY_WIDTH}x{constants.DISPLAY_HEIGHT}.\n\n"
+                "Elements may appear in the wrong position. Load anyway?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
         self.save_undo_state()
 
         self.theme_name = preset_data.get("name", "Untitled")
@@ -988,9 +1080,9 @@ class ThemeEditorWindow(QMainWindow):
         # Load video background settings if present
         video_data = preset_data.get("video_background", {})
         if video_data:
-            video_background.from_dict(video_data)
+            self._active_session.video_bg.from_dict(video_data)
         else:
-            video_background.clear_video()
+            self._active_session.video_bg.clear_video()
         self._update_video_ui()
 
         self.status_bar.showMessage(f"Loaded preset: {self.theme_name}")
@@ -1004,10 +1096,10 @@ class ThemeEditorWindow(QMainWindow):
         theme_data = {
             "name": self.theme_name,
             "background_color": self.background_color,
-            "display_width": DISPLAY_WIDTH,
-            "display_height": DISPLAY_HEIGHT,
+            "display_width": constants.DISPLAY_WIDTH,
+            "display_height": constants.DISPLAY_HEIGHT,
             "elements": [e.to_dict() for e in self.elements],
-            "video_background": video_background.to_dict()
+            "video_background": self._active_session.video_bg.to_dict()
         }
 
         # Capture current frame as thumbnail
@@ -1075,7 +1167,7 @@ class ThemeEditorWindow(QMainWindow):
             self._video_load_timer.timeout.connect(self._on_video_load_tick)
             self._video_load_timer.start(100)  # Update every 100ms
 
-            if not video_background.load_video(path, callback=self._on_video_load_progress):
+            if not self._active_session.video_bg.load_video(path, callback=self._on_video_load_progress):
                 self._video_load_timer.stop()
                 QMessageBox.warning(self, "Error", f"Failed to load video:\n{path}")
                 self.clear_video_background()
@@ -1083,7 +1175,7 @@ class ThemeEditorWindow(QMainWindow):
     def _on_video_load_tick(self):
         """Timer callback during video loading."""
         self.canvas.update()
-        if not video_background.is_loading:
+        if not self._active_session.video_bg.is_loading:
             self._video_load_timer.stop()
 
     def _on_video_load_progress(self, progress, done, error):
@@ -1094,9 +1186,9 @@ class ThemeEditorWindow(QMainWindow):
             return
 
         if done and not error:
-            mem_mb = video_background.memory_usage_mb
-            frames = video_background.frame_count
-            fps = video_background.fps
+            mem_mb = self._active_session.video_bg.memory_usage_mb
+            frames = self._active_session.video_bg.frame_count
+            fps = self._active_session.video_bg.fps
             QTimer.singleShot(0, lambda: self.status_bar.showMessage(
                 f"Video loaded: {frames} frames @ {fps:.1f}fps ({mem_mb:.1f} MB in memory)"
             ))
@@ -1109,14 +1201,14 @@ class ThemeEditorWindow(QMainWindow):
     def on_video_fit_changed(self, index):
         """Handle video fit mode change."""
         fit_mode = self.video_fit_combo.currentData()
-        if fit_mode and fit_mode != video_background.fit_mode:
+        if fit_mode and fit_mode != self._active_session.video_bg.fit_mode:
             self.status_bar.showMessage("Reloading video with new fit mode...")
             # Start timer to show loading progress
             if not hasattr(self, '_video_load_timer'):
                 self._video_load_timer = QTimer(self)
                 self._video_load_timer.timeout.connect(self._on_video_load_tick)
             self._video_load_timer.start(100)
-            video_background.set_fit_mode(fit_mode)
+            self._active_session.video_bg.set_fit_mode(fit_mode)
         self.canvas.update()
 
     def clear_video_background(self):
@@ -1124,7 +1216,7 @@ class ThemeEditorWindow(QMainWindow):
         # Stop load timer if running
         if hasattr(self, '_video_load_timer') and self._video_load_timer.isActive():
             self._video_load_timer.stop()
-        video_background.clear_video()
+        self._active_session.video_bg.clear_video()
         self.video_btn.setText("None")
         self.video_btn.setToolTip("")
         self.video_fit_combo.setEnabled(False)
@@ -1133,17 +1225,18 @@ class ThemeEditorWindow(QMainWindow):
         self.status_bar.showMessage("Video background cleared")
 
     def _update_video_ui(self):
-        """Update video UI controls to match current video_background state."""
-        if video_background.enabled:
-            filename = os.path.basename(video_background.video_path)
+        """Update video UI controls to match current session's video_bg state."""
+        vb = self._active_session.video_bg
+        if vb.enabled:
+            filename = os.path.basename(vb.video_path)
             if len(filename) > 12:
                 filename = filename[:10] + "..."
             self.video_btn.setText(filename)
-            self.video_btn.setToolTip(video_background.video_path)
+            self.video_btn.setToolTip(vb.video_path)
             self.video_fit_combo.setEnabled(True)
             self.clear_video_btn.setEnabled(True)
             # Set fit mode in combo
-            idx = self.video_fit_combo.findData(video_background.fit_mode)
+            idx = self.video_fit_combo.findData(vb.fit_mode)
             if idx >= 0:
                 self.video_fit_combo.setCurrentIndex(idx)
         else:
@@ -1164,7 +1257,7 @@ class ThemeEditorWindow(QMainWindow):
         self.canvas.set_elements(self.elements)
         self.properties_panel.set_element(None)
         # Clear video background
-        video_background.clear_video()
+        self._active_session.video_bg.clear_video()
         self._update_video_ui()
         self.status_bar.showMessage("New theme created")
 
@@ -1200,10 +1293,10 @@ class ThemeEditorWindow(QMainWindow):
                 # Load video background settings
                 video_data = data.get("video_background", {})
                 if video_data:
-                    video_background.from_dict(video_data)
+                    self._active_session.video_bg.from_dict(video_data)
                     self._update_video_ui()
                 else:
-                    video_background.clear_video()
+                    self._active_session.video_bg.clear_video()
                     self._update_video_ui()
 
                 self.theme_path = path
@@ -1231,10 +1324,10 @@ class ThemeEditorWindow(QMainWindow):
             data = {
                 "name": self.theme_name,
                 "background_color": self.background_color,
-                "display_width": DISPLAY_WIDTH,
-                "display_height": DISPLAY_HEIGHT,
+                "display_width": constants.DISPLAY_WIDTH,
+                "display_height": constants.DISPLAY_HEIGHT,
                 "elements": [e.to_dict() for e in self.elements],
-                "video_background": video_background.to_dict()
+                "video_background": self._active_session.video_bg.to_dict()
             }
 
             with open(path, 'w') as f:
@@ -1368,7 +1461,7 @@ class ThemeEditorWindow(QMainWindow):
 
     def toggle_connection(self):
         """Toggle between connected and disconnected states."""
-        if self.device:
+        if self.device_manager.is_connected:
             # User manually disconnecting - stop any auto-reconnect
             if self._reconnect_timer:
                 self._reconnect_timer.stop()
@@ -1378,23 +1471,57 @@ class ThemeEditorWindow(QMainWindow):
         else:
             self.connect_display()
 
-    def connect_display(self, show_error=True):
+    def connect_display(self, show_error=True, vid=None, pid=None):
         if not HAS_HID:
             if show_error:
                 QMessageBox.warning(self, "Error", "HID library not installed.\nRun: pip install hidapi")
             return False
 
         try:
-            self.device = hid.device()
-            self.device.open(0x0416, 0x5302)
+            if vid is None or pid is None:
+                # Parse preferred device from settings for auto-connect
+                pref = settings.get_setting("preferred_device", None)
+                if pref and ":" in pref:
+                    parts = pref.split(":")
+                    vid = int(parts[0], 16)
+                    pid = int(parts[1], 16)
+                else:
+                    # Try first available
+                    devices = self.device_manager.enumerate_devices()
+                    if devices:
+                        vid, pid = devices[0]["vid"], devices[0]["pid"]
+                    else:
+                        if show_error:
+                            QMessageBox.critical(self, "Error",
+                                "No supported display found.\n\nMake sure TRCC is closed and the device is connected.")
+                        return False
 
-            init = bytearray(512)
-            init[0:4] = bytes([0xDA, 0xDB, 0xDC, 0xDD])
-            init[4] = 0x00
-            init[12] = 0x01
-            self.device.write(bytes([0x00]) + bytes(init))
+            dev = self.device_manager.connect(vid, pid)
+            if not dev:
+                if show_error:
+                    QMessageBox.critical(self, "Error",
+                        "No supported display found.\n\nMake sure TRCC is closed and the device is connected.")
+                return False
 
-            # Update button text to "Disconnect"
+            device_key = f"{vid:04x}:{pid:04x}"
+
+            # Create or reuse session for this device
+            if device_key in self._sessions:
+                # Reconnecting — reattach device to existing session
+                session = self._sessions[device_key]
+                session.device = dev
+            else:
+                # New device — create fresh session
+                session = EditorSession(device=dev, resolution=(dev.display_width, dev.display_height))
+                self._sessions[device_key] = session
+
+            # Save as preferred device
+            settings.set_setting("preferred_device", device_key)
+
+            # Switch editor to this session
+            self.switch_session(device_key)
+
+            # Update UI
             self.connect_action.setText("Disconnect")
             self.send_action.setEnabled(True)
 
@@ -1412,7 +1539,8 @@ class ThemeEditorWindow(QMainWindow):
             self._was_connected_before_sleep = False
             self._reconnect_attempts = 0
 
-            self.status_bar.showMessage("Connected to display - sending frames")
+            self.status_bar.showMessage(f"Connected to {dev} - sending frames")
+            self.device_panel.update_connection_state()
             return True
 
         except Exception as e:
@@ -1420,27 +1548,156 @@ class ThemeEditorWindow(QMainWindow):
                 QMessageBox.critical(self, "Error", f"Failed to connect:\n{e}\n\nMake sure TRCC is closed.")
             return False
 
-    def disconnect_display(self):
-        self.stop_continuous_send()
+    def _populate_device_menu(self):
+        """Populate the Select Device submenu with enumerated devices."""
+        self.device_menu.clear()
+        devices = self.device_manager.enumerate_devices()
 
-        if self.device:
-            try:
-                self.device.close()
-            except Exception as e:
-                print(f"Error closing HID device: {e}")
-            finally:
-                self.device = None
+        if not devices:
+            no_dev = QAction("No devices found", self)
+            no_dev.setEnabled(False)
+            self.device_menu.addAction(no_dev)
+            return
+
+        connected_keys = self.device_manager.connected_keys
+        for dev_info in devices:
+            device_key = f"{dev_info['vid']:04x}:{dev_info['pid']:04x}"
+            label = f"{dev_info['name']} ({dev_info['width']}x{dev_info['height']})"
+            action = QAction(label, self)
+            action.setCheckable(True)
+            action.setChecked(device_key in connected_keys)
+            vid, pid = dev_info["vid"], dev_info["pid"]
+            action.triggered.connect(lambda checked, v=vid, p=pid: self._select_device(v, p))
+            self.device_menu.addAction(action)
+
+    def _select_device(self, vid, pid):
+        """Connect to a specific device selected from the menu."""
+        device_key = f"{vid:04x}:{pid:04x}"
+        if device_key in self.device_manager.connected_keys:
+            # Already connected — just switch session
+            self.switch_session(device_key)
+        else:
+            self.connect_display(vid=vid, pid=pid)
+
+    def _refresh_devices(self):
+        """Refresh the device list and show results."""
+        devices = self.device_manager.enumerate_devices()
+        if devices:
+            names = [f"  {d['name']} ({d['width']}x{d['height']})" for d in devices]
+            self.status_bar.showMessage(f"Found {len(devices)} device(s)")
+            print(f"[Devices] Found {len(devices)} device(s):")
+            for n in names:
+                print(n)
+        else:
+            self.status_bar.showMessage("No supported devices found")
+            print("[Devices] No supported devices found")
+
+    def disconnect_display(self, vid=None, pid=None):
+        """Disconnect a specific device, or all if vid/pid not given."""
+        if vid is not None and pid is not None:
+            device_key = f"{vid:04x}:{pid:04x}"
+            self.device_manager.disconnect(vid, pid)
+
+            # Detach device from session but keep session
+            if device_key in self._sessions:
+                self._sessions[device_key].device = None
+
+            # If disconnecting the active session, switch to another
+            if self._active_session.device_key == device_key:
+                self._switch_to_next_session()
+        else:
+            # Disconnect all
+            for session in self._sessions.values():
+                session.device = None
+            self.device_manager.disconnect_all()
+            self.stop_continuous_send()
 
         self.frame_times = []
         self.last_frame_time = 0
 
-        # Update button text to "Connect"
+        # Stop continuous send if no devices remain
+        if not self.device_manager.is_connected:
+            self.stop_continuous_send()
+
+        # Update UI
         try:
-            self.connect_action.setText("Connect")
-            self.send_action.setEnabled(False)
+            has_connected = self.device_manager.is_connected
+            self.connect_action.setText("Disconnect" if has_connected else "Connect")
+            self.send_action.setEnabled(has_connected)
+            self._update_device_label()
+            self.device_panel.update_connection_state()
             self.status_bar.showMessage("Disconnected")
         except:
             pass  # UI might not be available during shutdown
+
+    def _on_device_panel_connect(self, vid, pid):
+        """Handle connect request from device panel."""
+        self.connect_display(vid=vid, pid=pid)
+
+    def _on_device_panel_disconnect(self, vid, pid):
+        """Handle disconnect request from device panel."""
+        self.disconnect_display(vid=vid, pid=pid)
+
+    def _on_device_panel_selected(self, device_key):
+        """Handle session switch request from device panel."""
+        if device_key in self._sessions:
+            self.switch_session(device_key)
+
+    def switch_session(self, session_key):
+        """Switch the editor to a different device session."""
+        if session_key not in self._sessions:
+            return
+        session = self._sessions[session_key]
+        if session is self._active_session:
+            return
+
+        self._active_session = session
+
+        # Update global resolution
+        constants.set_display_resolution(*session.resolution)
+
+        # Re-point canvas
+        self.canvas.set_video_background(session.video_bg)
+        self.canvas.set_elements(session.elements)
+        self.canvas.set_background_color(session.background_color)
+        self.canvas.update_display_size()
+        self.canvas.set_selected_indices([])
+
+        # Re-point element list
+        self.element_list.set_elements(session.elements)
+
+        # Update properties panel
+        self.properties_panel.set_element(None)
+
+        # Update presets panel resolution filter
+        self.presets_panel.set_resolution_filter(*session.resolution)
+
+        # Update theme name / background color UI
+        self.theme_name_edit.setText(session.theme_name)
+        self.bg_color_btn.setStyleSheet(f"background-color: {session.background_color};")
+
+        # Update video UI
+        self._update_video_ui()
+
+        # Update undo/redo action states
+        self.update_undo_actions()
+
+        # Update device label and panel
+        self._update_device_label()
+        self.device_panel.update_active_device(session.device_key)
+        self.device_panel.update_connection_state()
+
+        self.status_bar.showMessage(f"Switched to session: {session.device_key}")
+
+    def _switch_to_next_session(self):
+        """Switch to another connected session, or offline if none available."""
+        # Prefer another connected session
+        for key, session in self._sessions.items():
+            if session.device is not None and session is not self._active_session:
+                self.switch_session(key)
+                return
+        # Fall back to offline
+        self.switch_session("offline")
 
     def set_target_fps(self, fps):
         # Show warning for 60 FPS if not suppressed
@@ -1539,23 +1796,26 @@ class ThemeEditorWindow(QMainWindow):
             self._render_thread = None
 
     def _render_thread_loop(self):
-        """Background thread that pre-renders frames."""
+        """Background thread that pre-renders frames for all connected sessions."""
         while self._render_thread_running:
             try:
-                if self.device and self._overdrive_mode:
-                    # Update sensor values
+                if self.device_manager.is_connected and self._overdrive_mode:
                     sensor_data = self.get_sensor_data()
-                    for element in self.elements:
-                        if element.source != "static" and element.source in sensor_data:
-                            element.value = sensor_data[element.source]
 
-                    # Render frame
-                    img = self.render_theme_image()
-                    jpeg_data = self.image_to_jpeg(img)
+                    for session in self._sessions.values():
+                        if session.device is None:
+                            continue
+                        # Update sensor values on this session's elements
+                        for element in session.elements:
+                            if element.source != "static" and element.source in sensor_data:
+                                element.value = sensor_data[element.source]
 
-                    # Store in buffer
-                    with self._frame_buffer_lock:
-                        self._frame_buffer = jpeg_data
+                        # Render frame for this session
+                        img = self._render_session_frame(session)
+
+                        # Store in per-session buffer
+                        with session.frame_buffer_lock:
+                            session.frame_buffer = img
 
                 # Sleep to match roughly 2x target FPS for buffer freshness
                 time.sleep(1.0 / (self.target_fps * 2))
@@ -1597,78 +1857,83 @@ class ThemeEditorWindow(QMainWindow):
         self.send_frame_with_sensors()
 
     def send_frame_with_sensors(self):
-        if not self.device:
+        if not self.device_manager.is_connected:
             return
 
         try:
             current_time = time.perf_counter()
             frame_interval = 1.0 / self.target_fps
+            sensor_data = self.get_sensor_data()
 
-            # Time-compensated frame delivery
-            if self._overdrive_mode:
-                # Check if we're behind schedule
-                if current_time < self._frame_deadline:
-                    # We're ahead - wait until deadline (smooth pacing)
-                    pass
-                elif current_time > self._frame_deadline + frame_interval:
-                    # We're more than one frame behind - skip frames to catch up
-                    frames_behind = int((current_time - self._frame_deadline) / frame_interval)
-                    self._frames_skipped += frames_behind
-                    self._frame_deadline = current_time  # Reset deadline
+            # Iterate all sessions with connected devices
+            failed_sessions = []
+            for session_key, session in self._sessions.items():
+                if session.device is None:
+                    continue
 
-                # Use pre-rendered frame from buffer if available
-                jpeg_data = None
-                with self._frame_buffer_lock:
-                    if self._frame_buffer:
-                        jpeg_data = self._frame_buffer
-
-                if jpeg_data:
-                    self.send_jpeg_frame(jpeg_data)
-                else:
-                    # Fallback to direct render if buffer empty
-                    sensor_data = self.get_sensor_data()
-                    for element in self.elements:
+                try:
+                    # Update sensor values on this session's elements
+                    for element in session.elements:
                         if element.source != "static" and element.source in sensor_data:
                             element.value = sensor_data[element.source]
-                    img = self.render_theme_image()
-                    jpeg_data = self.image_to_jpeg(img)
-                    self.send_jpeg_frame(jpeg_data)
 
-                # Advance deadline
+                    if self._overdrive_mode:
+                        # Use pre-rendered frame from buffer if available
+                        img = None
+                        with session.frame_buffer_lock:
+                            if session.frame_buffer is not None:
+                                img = session.frame_buffer
+
+                        if img is None:
+                            # Fallback to direct render
+                            img = self._render_session_frame(session)
+
+                        session.device.send_frame(img)
+                    else:
+                        # Standard mode — direct render and send
+                        img = self._render_session_frame(session)
+                        session.device.send_frame(img)
+
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "device" in error_str or "hid" in error_str or "write" in error_str or "closed" in error_str:
+                        print(f"[HID] Device error on {session_key}: {e}")
+                        failed_sessions.append(session_key)
+                    else:
+                        print(f"Send error on {session_key}: {e}")
+
+            # Handle overdrive timing
+            if self._overdrive_mode:
+                if current_time > self._frame_deadline + frame_interval:
+                    frames_behind = int((current_time - self._frame_deadline) / frame_interval)
+                    self._frames_skipped += frames_behind
+                    self._frame_deadline = current_time
                 self._frame_deadline += frame_interval
-            else:
-                # Standard mode - direct render and send
-                sensor_data = self.get_sensor_data()
 
-                for element in self.elements:
-                    if element.source != "static" and element.source in sensor_data:
-                        element.value = sensor_data[element.source]
+            # Handle failed sessions
+            for session_key in failed_sessions:
+                session = self._sessions.get(session_key)
+                if session and session.device:
+                    vid = session.device.vendor_id
+                    pid = session.device.product_id
+                    self.disconnect_display(vid=vid, pid=pid)
+                self._was_connected_before_sleep = True
+                self._reconnect_attempts = 0
+                self._start_reconnect_timer()
+                self.status_bar.showMessage("Display disconnected - attempting to reconnect...")
 
-                img = self.render_theme_image()
-                jpeg_data = self.image_to_jpeg(img)
-                self.send_jpeg_frame(jpeg_data)
-
-            # Throttle canvas updates to reduce CPU usage
+            # Throttle canvas updates (only for active session)
             self._canvas_update_counter += 1
             if self._canvas_update_counter >= self._canvas_update_interval:
                 self._canvas_update_counter = 0
-                self.canvas.set_elements(self.elements)
+                self.canvas.set_elements(self._active_session.elements)
                 self.canvas.update()
 
             self.record_frame_time()
 
         except Exception as e:
-            error_str = str(e).lower()
-            if "device" in error_str or "hid" in error_str or "write" in error_str or "closed" in error_str:
-                print(f"[HID] Device error, disconnecting: {e}")
-                self.disconnect_display()
-                self._was_connected_before_sleep = True
-                self._reconnect_attempts = 0
-                self._start_reconnect_timer()
-                self.status_bar.showMessage("Display disconnected - attempting to reconnect...")
-            else:
-                print(f"Send error: {e}")
-                self.status_bar.showMessage(f"Error: {e}")
+            print(f"Send error: {e}")
+            self.status_bar.showMessage(f"Error: {e}")
 
     _font_cache = None
 
@@ -1861,18 +2126,26 @@ class ThemeEditorWindow(QMainWindow):
         return font
 
     def render_theme_image(self):
+        """Render the active session's theme image."""
+        return self._render_session_frame(self._active_session)
+
+    def _render_session_frame(self, session):
+        """Render a full frame for a given session."""
+        w, h = session.resolution
+        vb = session.video_bg
+
         # Use video frame as background if enabled, otherwise solid color
-        if video_background.enabled:
-            video_frame = video_background.get_frame_pil()
+        if vb and vb.enabled:
+            video_frame = vb.get_frame_pil()
             if video_frame:
                 img = video_frame.copy().convert('RGBA')
             else:
-                img = Image.new('RGBA', (DISPLAY_WIDTH, DISPLAY_HEIGHT), color=self.background_color)
+                img = Image.new('RGBA', (w, h), color=session.background_color)
         else:
-            img = Image.new('RGBA', (DISPLAY_WIDTH, DISPLAY_HEIGHT), color=self.background_color)
+            img = Image.new('RGBA', (w, h), color=session.background_color)
 
         # Render in reverse order so elements at top of list appear in front
-        for element in reversed(self.elements):
+        for element in reversed(session.elements):
             self.render_element_with_opacity(img, element)
 
         # Convert back to RGB for output
@@ -3229,48 +3502,6 @@ class ThemeEditorWindow(QMainWindow):
                     center_y = y + height + 16 + text_height // 2
                     draw.text((text_x, center_y), element.text, fill=label_text_color, font=label_font, anchor="lm")
 
-    def image_to_jpeg(self, img, quality=80):
-        """Convert image to JPEG bytes with optimized settings."""
-        buffer = io.BytesIO()
-        # Use quality=80 and optimize=False for faster encoding
-        # The LCD display doesn't need highest quality
-        img.save(buffer, format='JPEG', quality=quality, optimize=False, subsampling=2)
-        return buffer.getvalue()
-
-    def send_jpeg_frame(self, jpeg_data):
-        if not self.device:
-            raise IOError("Device not connected")
-
-        MAGIC = bytes([0xDA, 0xDB, 0xDC, 0xDD])
-
-        header = bytearray(512)
-        header[0:4] = MAGIC
-        header[4] = 0x02
-        header[8:12] = bytes([0x00, 0x05, 0xE0, 0x01])
-        header[12] = 0x02
-
-        jpeg_len = len(jpeg_data)
-        header[16] = jpeg_len & 0xFF
-        header[17] = (jpeg_len >> 8) & 0xFF
-        header[18] = (jpeg_len >> 16) & 0xFF
-        header[19] = (jpeg_len >> 24) & 0xFF
-
-        first_chunk = min(len(jpeg_data), 492)
-        header[20:20 + first_chunk] = jpeg_data[:first_chunk]
-
-        try:
-            self.device.write(bytes([0x00]) + bytes(header))
-
-            offset = first_chunk
-            while offset < len(jpeg_data):
-                chunk = jpeg_data[offset:offset + 512]
-                if len(chunk) < 512:
-                    chunk = chunk + bytes(512 - len(chunk))
-                self.device.write(bytes([0x00]) + chunk)
-                offset += 512
-        except Exception as e:
-            raise IOError(f"HID write failed: {e}")
-
     def show_settings(self):
         """Show the settings dialog."""
         dialog = QDialog(self)
@@ -3362,7 +3593,10 @@ class ThemeEditorWindow(QMainWindow):
         self._stop_render_thread()
         stop_psutil_thread()
         stop_sensors()
-        video_background.close()
+
+        # Close all session video backgrounds
+        for session in self._sessions.values():
+            session.video_bg.close()
 
     def force_quit(self):
         """Force quit the application, bypassing minimize-to-tray."""
