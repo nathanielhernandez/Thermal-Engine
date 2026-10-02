@@ -1,0 +1,63 @@
+{
+  "name": "thermal-engine",
+  "productName": "ThermalEngine",
+  "version": "0.9.0",
+  "description": "Visual theme editor and live driver for 1280x480 AIO cooler LCD displays",
+  "author": "Nathaniel Hernandez",
+  "license": "MIT",
+  "private": true,
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test \"test/*.test.*\"",
+    "dist": "electron-builder --win --publish never",
+    "dist:dir": "electron-builder --win --dir --publish never"
+  },
+  "dependencies": {
+    "koffi": "^3.3.2",
+    "node-hid": "^3.4.0"
+  },
+  "devDependencies": {
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.thermalengine.app",
+    "productName": "ThermalEngine",
+    "npmRebuild": false,
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "presets",
+        "to": "presets",
+        "filter": [
+          "*.json",
+          "*.png"
+        ]
+      }
+    ],
+    "asarUnpack": [
+      "node_modules/node-hid/**",
+      "node_modules/koffi/**",
+      "node_modules/@koromix/**"
+    ],
+    "win": {
+      "icon": "assets/icon.png",
+      "target": [
+        "nsis",
+        "zip"
+      ],
+      "artifactName": "ThermalEngine-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "ThermalEngine-${version}-Setup.${ext}"
+    }
+  }
+}

@@ -4,7 +4,7 @@
 
 A visual theme editor for **LCD AIO cooler displays** (1280x480). Create custom monitoring themes with real-time CPU/GPU sensor data, gauges, clocks, images, and video backgrounds.
 
-![Preview](https://img.shields.io/badge/Display-1280x480-blue) ![Python](https://img.shields.io/badge/Python-3.10+-green) ![License](https://img.shields.io/badge/License-MIT-yellow)
+![Preview](https://img.shields.io/badge/Display-1280x480-blue) ![Electron](https://img.shields.io/badge/Electron-44-green) ![License](https://img.shields.io/badge/License-MIT-yellow)
 
 <img width="1306" height="732" alt="image" src="https://github.com/user-attachments/assets/d6eafe44-8ea3-4f00-a6bd-2c0b672de1d8" />
 
@@ -28,7 +28,7 @@ A visual theme editor for **LCD AIO cooler displays** (1280x480). Create custom 
 - **Multi-select** with alignment tools
 - **Element grouping** for organizing complex themes
 - **Undo/Redo** support
-- **System tray** support with minimize-to-tray
+- **System tray** support with minimize-to-tray (the display keeps updating while hidden)
 
 ## Supported Displays
 
@@ -39,7 +39,7 @@ A visual theme editor for **LCD AIO cooler displays** (1280x480). Create custom 
 
 - Windows 10/11
 - **HWiNFO** (for hardware sensor data) - [Download here](https://www.hwinfo.com/)
-- Python 3.10+ (only if running from source)
+- Node.js 24+ (only if running from source)
 
 ### Hardware Sensor Support
 
@@ -70,7 +70,7 @@ ThermalEngine uses **HWiNFO Shared Memory** to read hardware sensors. This appro
 ### Download (Recommended)
 
 1. Go to [Releases](https://github.com/nathanielhernandez/ThermalEngine/releases)
-2. Download `ThermalEngine-vX.X.X.zip` (portable) or `ThermalEngine-vX.X.X-Setup.exe` (installer)
+2. Download `ThermalEngine-X.X.X.zip` (portable) or `ThermalEngine-X.X.X-Setup.exe` (installer)
 3. **Portable**: Extract the ZIP and run `ThermalEngine.exe`
 4. **Installer**: Run the setup and launch from Start Menu
 5. Make sure HWiNFO is running with Shared Memory enabled
@@ -83,39 +83,36 @@ ThermalEngine uses **HWiNFO Shared Memory** to read hardware sensors. This appro
    cd Thermal-Engine
    ```
 
-2. Install Python dependencies:
+2. Install dependencies:
    ```bash
-   pip install -r requirements.txt
+   npm install
    ```
 
 3. Run the editor:
    ```bash
-   python main.py
+   npm start
    ```
 
-### Local Test Build
+4. Run the tests:
+   ```bash
+   npm test
+   ```
 
-Build a standalone executable locally:
+### Local Build
 
-```powershell
-# Basic build (ZIP only)
-.\scripts\build-local.ps1 -SkipInstaller
+```bash
+# Unpacked app for quick testing: dist\win-unpacked\ThermalEngine.exe
+npm run dist:dir
 
-# Clean build (removes previous artifacts first)
-.\scripts\build-local.ps1 -Clean -SkipInstaller
-
-# Build with installer (requires Inno Setup)
-.\scripts\build-local.ps1
+# Installer and portable ZIP in dist\
+npm run dist
 ```
 
-**Output:**
-- `dist\ThermalEngine\ThermalEngine.exe` - Run directly to test
-- `ThermalEngine-local-dev.zip` - Portable distribution
+Pushing a `vX.Y.Z` tag builds both and publishes a GitHub release.
 
-**Clean up test build:**
-```powershell
-.\scripts\clean-local.ps1
-```
+### Upgrading from 0.8.x (Python)
+
+Settings and presets now live in `%APPDATA%\ThermalEngine`. On first launch, presets from a previous install in `%LOCALAPPDATA%\ThermalEngine\presets` are copied over automatically. Theme `.json` files are compatible in both directions.
 
 ## Usage
 
@@ -197,30 +194,39 @@ Go to **Display > Diagnose Sensors** to verify sensor connection.
 
 ```
 Thermal-Engine/
-├── main.py              # Entry point
-├── main_window.py       # Main application window
-├── canvas.py            # Visual preview widget
-├── properties.py        # Properties panel
-├── element_list.py      # Element list panel
-├── presets.py           # Preset management
-├── element.py           # Theme element data model
-├── sensors.py           # Sensor polling and smoothing
-├── hwinfo_reader.py     # HWiNFO shared memory reader
-├── video_background.py  # Video background support
-├── constants.py         # Configuration constants
-├── scripts/             # Build and utility scripts
-│   ├── build-local.ps1  # Local build script
-│   └── clean-local.ps1  # Clean up build artifacts
-├── assets/              # Icons and images
-│   ├── icon.ico
-│   └── icon.png
-├── elements/            # Custom element plugins
-│   ├── line_chart.py
-│   └── gif.py
-├── presets/             # Saved presets
-└── .github/workflows/   # CI/CD workflows
-    └── release.yml      # Automated release build
+├── src/
+│   ├── main/                 # Electron main process (Node.js)
+│   │   ├── main.js           # App lifecycle, window, tray, IPC
+│   │   ├── display.js        # USB HID driver for the LCD (node-hid)
+│   │   ├── hwinfo.js         # HWiNFO shared memory reader (koffi FFI)
+│   │   ├── system-stats.js   # CPU, RAM and network stats
+│   │   ├── sensors.js        # Sensor polling and smoothing
+│   │   ├── presets.js        # Preset storage
+│   │   ├── settings.js       # Persistent settings and autostart
+│   │   ├── validation.js     # Theme file validation
+│   │   ├── protocol.js       # te:// protocol for app files and local media
+│   │   ├── menu.js           # Application menu
+│   │   └── preload.js        # Renderer bridge (window.te)
+│   └── renderer/             # UI (plain ES modules, no build step)
+│       ├── index.html
+│       ├── styles.css
+│       └── js/
+│           ├── app.js        # Wiring, commands, shortcuts
+│           ├── engine.js     # Frame loop: render once, preview + send to LCD
+│           ├── render.js     # Scene renderer (Canvas 2D at 1280x480)
+│           ├── store.js      # Editor state and undo/redo
+│           ├── model.js      # Element data model
+│           ├── elements/     # One module per element type
+│           └── ui/           # Canvas view, layer list, properties, presets
+├── test/                     # Unit tests (node --test)
+├── assets/                   # Icons
+├── presets/                  # Bundled presets
+└── .github/workflows/        # Release build
 ```
+
+### Adding an element type
+
+Create a module in `src/renderer/js/elements/` that exports `type`, `name`, `defaults` and `draw(ctx, element, env)`, register it in `elements/index.js`, and list its editable properties in `src/renderer/js/ui/property-schema.js`. The same `draw` function renders both the editor preview and the LCD frame.
 
 ## License
 
@@ -229,8 +235,9 @@ MIT License - See LICENSE file for details.
 ## Credits
 
 - [HWiNFO](https://www.hwinfo.com/) - Hardware sensor data provider
-- [PySide6](https://www.qt.io/qt-for-python) - Qt GUI framework
-- [Pillow](https://pillow.readthedocs.io/) - Image processing
+- [Electron](https://www.electronjs.org/) - Desktop app framework
+- [node-hid](https://github.com/node-hid/node-hid) - USB HID access
+- [Koffi](https://koffi.dev/) - Native Windows API calls
 
 ## Contributing
 

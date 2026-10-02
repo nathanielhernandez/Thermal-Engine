@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' te: data: blob:; media-src te: blob:; connect-src te:; font-src 'self' data:">
+  <title>Thermal Engine</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <div id="app">
+    <aside id="left-panel" class="side-panel">
+      <div class="tabs">
+        <button class="tab active" data-panel="elements-panel">Elements</button>
+        <button class="tab" data-panel="presets-panel">Presets</button>
+      </div>
+      <div id="elements-panel" class="tab-panel"></div>
+      <div id="presets-panel" class="tab-panel" hidden></div>
+    </aside>
+
+    <main id="center">
+      <div id="toolbar">
+        <label class="tool-field grow">
+          <span>Theme</span>
+          <input id="theme-name" class="text-input" type="text" spellcheck="false">
+        </label>
+        <button id="save-btn" class="btn primary" title="Save to presets (Ctrl+S)">Save</button>
+        <div class="tool-sep"></div>
+        <button id="undo-btn" class="btn icon" title="Undo (Ctrl+Z)">↶</button>
+        <button id="redo-btn" class="btn icon" title="Redo (Ctrl+Y)">↷</button>
+        <div class="tool-sep"></div>
+        <label class="tool-field">
+          <span>Background</span>
+          <input id="bg-color" class="color-input" type="color">
+        </label>
+        <label class="tool-field">
+          <span>Video</span>
+          <button id="video-btn" class="btn">None</button>
+        </label>
+        <select id="video-fit" class="select" title="Video fit">
+          <option value="fit_height">Fit height</option>
+          <option value="fit_width">Fit width</option>
+        </select>
+        <button id="video-clear" class="btn icon" title="Clear video">✕</button>
+      </div>
+
+      <div id="hwinfo-banner" class="banner" hidden>
+        <span>HWiNFO isn't running with Shared Memory enabled, so CPU/GPU temperatures, clocks and power will read 0.</span>
+        <button id="hwinfo-help" class="btn">Setup help</button>
+        <button id="hwinfo-dismiss" class="btn icon" title="Dismiss">✕</button>
+      </div>
+
+      <div id="canvas-wrap">
+        <canvas id="preview" tabindex="0"></canvas>
+      </div>
+    </main>
+
+    <aside id="properties-panel" class="side-panel"></aside>
+  </div>
+
+  <footer id="statusbar">
+    <span id="status-message">Ready</span>
+    <span class="spacer"></span>
+    <button id="sensor-chip" class="chip clickable">Sensors…</button>
+    <button id="display-chip" class="chip clickable">Display disconnected</button>
+    <span id="perf-indicator" class="perf-dot"></span>
+    <span id="perf-label">FPS -- | CPU --%</span>
+  </footer>
+
+  <datalist id="font-families"></datalist>
+</body>
+</html>
