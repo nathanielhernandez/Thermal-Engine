@@ -3,8 +3,6 @@
  * background. Files are served through te://local so canvases stay untainted.
  */
 
-import { DISPLAY_WIDTH, DISPLAY_HEIGHT } from './constants.js';
-
 export function localUrl(filePath) {
   return `te://local/${encodeURIComponent(filePath)}`;
 }
@@ -185,17 +183,18 @@ export class VideoBackground {
     const vw = this.video.videoWidth;
     const vh = this.video.videoHeight;
     if (!vw || !vh) return false;
+    const { width: cw, height: ch } = ctx.canvas;
     const aspect = vw / vh;
     let w;
     let h;
     if (this.fitMode === 'fit_width') {
-      w = DISPLAY_WIDTH;
-      h = DISPLAY_WIDTH / aspect;
+      w = cw;
+      h = cw / aspect;
     } else {
-      h = DISPLAY_HEIGHT;
-      w = DISPLAY_HEIGHT * aspect;
+      h = ch;
+      w = ch * aspect;
     }
-    ctx.drawImage(this.video, (DISPLAY_WIDTH - w) / 2, (DISPLAY_HEIGHT - h) / 2, w, h);
+    ctx.drawImage(this.video, (cw - w) / 2, (ch - h) / 2, w, h);
     return true;
   }
 

@@ -4,6 +4,7 @@
  */
 
 import { Store } from './store.js';
+import { ORIENTATIONS } from './constants.js';
 import { Engine } from './engine.js';
 import { Actions } from './actions.js';
 import { VideoBackground, onMediaLoaded, resetGifPlayback } from './media.js';
@@ -112,6 +113,14 @@ class App {
     $('#theme-name').addEventListener('input', (e) => store.setThemeName(e.target.value));
     $('#save-btn').addEventListener('click', () => this.run('quick-save'));
     $('#bg-color').addEventListener('input', (e) => store.setBackgroundColor(e.target.value));
+    const orientation = $('#orientation');
+    for (const [value, { label }] of Object.entries(ORIENTATIONS)) {
+      orientation.append(Object.assign(document.createElement('option'), { value, textContent: label }));
+    }
+    orientation.addEventListener('change', () => {
+      store.setOrientation(orientation.value);
+      this.status(`Orientation: ${ORIENTATIONS[orientation.value].label}`);
+    });
     $('#video-btn').addEventListener('click', () => this.chooseVideo());
     $('#video-fit').addEventListener('change', (e) => {
       if (this.video.enabled) this.video.fitMode = e.target.value;
@@ -136,6 +145,7 @@ class App {
     const nameInput = $('#theme-name');
     if (document.activeElement !== nameInput) nameInput.value = store.themeName;
     $('#bg-color').value = store.backgroundColor.slice(0, 7);
+    $('#orientation').value = store.orientation;
     const videoName = video.path ? video.path.split(/[\\/]/).pop() : 'None';
     $('#video-btn').textContent = videoName.length > 16 ? `${videoName.slice(0, 14)}…` : videoName;
     $('#video-btn').title = video.path || 'Choose a video background';
@@ -212,7 +222,7 @@ class App {
   }
 
   newTheme() {
-    this.store.loadTheme({ name: 'Untitled Theme', background_color: '#0f0f19', elements: [] });
+    this.store.loadTheme({ name: 'Untitled Theme', background_color: '#0f0f19', orientation: this.store.orientation, elements: [] });
     this.savedPresetName = null;
     this.status('New theme created');
   }

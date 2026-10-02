@@ -4,6 +4,7 @@
 
 const path = require('path');
 
+const ORIENTATIONS = new Set(['landscape', 'portrait', 'landscape_inverted', 'portrait_inverted']);
 const HEX_COLOR = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
 const RESERVED_NAMES = new Set([
   'CON', 'PRN', 'AUX', 'NUL',
@@ -80,7 +81,7 @@ function validateTheme(data) {
   const errors = [];
   if (!data || typeof data !== 'object' || Array.isArray(data)) return { valid: false, errors: ['Root must be an object'] };
 
-  const allowed = new Set(['name', 'background_color', 'display_width', 'display_height', 'elements', 'video_background']);
+  const allowed = new Set(['name', 'background_color', 'orientation', 'display_width', 'display_height', 'elements', 'video_background']);
   for (const key of Object.keys(data)) {
     if (!allowed.has(key)) errors.push(`Unknown key: ${key}`);
   }
@@ -90,6 +91,7 @@ function validateTheme(data) {
     else if (data.name.length > 100) errors.push("'name' too long (max 100 chars)");
   }
   if ('background_color' in data && !isValidColor(data.background_color)) errors.push("Invalid 'background_color' format");
+  if ('orientation' in data && !ORIENTATIONS.has(data.orientation)) errors.push("Invalid 'orientation' value");
 
   for (const dim of ['display_width', 'display_height']) {
     if (dim in data && (!Number.isInteger(data[dim]) || data[dim] < 0 || data[dim] > 10000)) errors.push(`Invalid '${dim}' value`);

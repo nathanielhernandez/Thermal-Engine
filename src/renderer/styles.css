@@ -308,7 +308,7 @@ body { display: flex; flex-direction: column; }
 }
 .preset-card:hover { border-color: var(--accent); }
 .preset-card.is-default { border-color: rgba(255, 193, 7, 0.6); }
-.preset-thumb { display: block; width: 100%; aspect-ratio: 1280 / 480; object-fit: cover; background: #111; }
+.preset-thumb { display: block; width: 100%; aspect-ratio: 1280 / 480; object-fit: contain; background: #111; }
 .preset-name {
   display: block;
   padding: 4px 6px;

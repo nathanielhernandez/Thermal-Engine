@@ -2,7 +2,7 @@
  * Editor state: the theme being edited, the selection and undo/redo history.
  */
 
-import { DISPLAY_WIDTH, DISPLAY_HEIGHT } from './constants.js';
+import { DEFAULT_ORIENTATION, ORIENTATIONS, getOrientation } from './constants.js';
 import { normalizeElement, serializeElement, normalizeGroups } from './model.js';
 
 const MAX_UNDO = 50;
@@ -15,6 +15,7 @@ export class Store extends EventTarget {
     this.themeName = 'Untitled Theme';
     this.themePath = null;
     this.backgroundColor = '#0f0f19';
+    this.orientation = DEFAULT_ORIENTATION;
     this.elements = [];
     this.selection = [];
     this.groupSelection = false;
@@ -38,12 +39,20 @@ export class Store extends EventTarget {
     return { backgroundColor: this.backgroundColor, elements: this.elements, video: this.video };
   }
 
+  /** Size of the upright theme canvas for the current orientation. */
+  get canvasSize() {
+    const { width, height } = getOrientation(this.orientation);
+    return { width, height };
+  }
+
   toThemeData() {
+    const { width, height } = this.canvasSize;
     return {
       name: this.themeName,
       background_color: this.backgroundColor,
-      display_width: DISPLAY_WIDTH,
-      display_height: DISPLAY_HEIGHT,
+      orientation: this.orientation,
+      display_width: width,
+      display_height: height,
       elements: this.elements.map(serializeElement),
       video_background: this.video.toJSON(),
     };
@@ -54,6 +63,7 @@ export class Store extends EventTarget {
     this.themeName = data.name || 'Untitled';
     this.themePath = path;
     this.backgroundColor = data.background_color || '#0f0f19';
+    this.orientation = data.orientation in ORIENTATIONS ? data.orientation : DEFAULT_ORIENTATION;
     this.elements = normalizeGroups((data.elements || []).map(normalizeElement));
     const vb = data.video_background;
     if (vb && vb.enabled && vb.video_path) this.video.load(vb.video_path, vb.fit_mode || 'fit_height');
@@ -65,6 +75,13 @@ export class Store extends EventTarget {
 
   setThemeName(name) {
     this.themeName = name;
+    this.emit('theme');
+  }
+
+  setOrientation(orientation) {
+    if (!(orientation in ORIENTATIONS) || orientation === this.orientation) return;
+    this.checkpoint();
+    this.orientation = orientation;
     this.emit('theme');
   }
 
@@ -122,6 +139,7 @@ export class Store extends EventTarget {
     return {
       elements: this.elements.map(serializeElement),
       backgroundColor: this.backgroundColor,
+      orientation: this.orientation,
     };
   }
 
@@ -145,6 +163,7 @@ export class Store extends EventTarget {
   restore(state) {
     this.elements = state.elements.map(normalizeElement);
     this.backgroundColor = state.backgroundColor;
+    this.orientation = state.orientation;
     this.lastCheckpoint = { key: null, time: 0 };
     this.select([]);
     this.emit('theme');

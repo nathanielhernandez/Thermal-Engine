@@ -3,7 +3,6 @@
  * shown in the editor (scaled) and sent to the LCD.
  */
 
-import { DISPLAY_WIDTH, DISPLAY_HEIGHT } from './constants.js';
 import { getElementType } from './elements/index.js';
 
 const animated = new WeakMap();
@@ -64,7 +63,7 @@ export function renderScene(ctx, scene, env) {
   ctx.globalAlpha = 1;
   ctx.filter = 'none';
   ctx.fillStyle = scene.backgroundColor;
-  ctx.fillRect(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   if (scene.video?.enabled) scene.video.draw(ctx);
 
   for (let i = scene.elements.length - 1; i >= 0; i--) {

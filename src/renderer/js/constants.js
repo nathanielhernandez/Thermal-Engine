@@ -1,5 +1,38 @@
+// Native panel resolution. Frames sent to the device are always this size.
 export const DISPLAY_WIDTH = 1280;
 export const DISPLAY_HEIGHT = 480;
+
+/**
+ * How the panel is mounted. Themes are designed upright on a canvas of
+ * `width` x `height`; each frame is rotated by `rotation` degrees
+ * (clockwise) to fit the panel's native landscape frame.
+ */
+export const ORIENTATIONS = {
+  landscape: { label: 'Landscape', rotation: 0, width: DISPLAY_WIDTH, height: DISPLAY_HEIGHT },
+  portrait: { label: 'Portrait', rotation: 90, width: DISPLAY_HEIGHT, height: DISPLAY_WIDTH },
+  landscape_inverted: { label: 'Landscape (inverted)', rotation: 180, width: DISPLAY_WIDTH, height: DISPLAY_HEIGHT },
+  portrait_inverted: { label: 'Portrait (inverted)', rotation: 270, width: DISPLAY_HEIGHT, height: DISPLAY_WIDTH },
+};
+
+export const DEFAULT_ORIENTATION = 'landscape';
+
+export function getOrientation(name) {
+  return ORIENTATIONS[name] || ORIENTATIONS[DEFAULT_ORIENTATION];
+}
+
+/**
+ * Map a point on the upright theme canvas to native panel pixels.
+ * Used by the frame rotation and its tests.
+ */
+export function canvasToPanel(orientation, x, y) {
+  const { rotation, width, height } = getOrientation(orientation);
+  switch (rotation) {
+    case 90: return { x: height - y, y: x };
+    case 180: return { x: width - x, y: height - y };
+    case 270: return { x: y, y: width - x };
+    default: return { x, y };
+  }
+}
 
 // Format: [source_id, display name, unit type, unit symbol]
 export const DATA_SOURCES_CATEGORIZED = {

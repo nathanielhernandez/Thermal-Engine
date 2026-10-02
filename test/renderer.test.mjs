@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
-import { formatValue } from '../src/renderer/js/constants.js';
+import { formatValue, canvasToPanel, getOrientation, DISPLAY_WIDTH, DISPLAY_HEIGHT } from '../src/renderer/js/constants.js';
 import { interpolateGradient, rgba, autoColor } from '../src/renderer/js/color.js';
 import { normalizeElement, serializeElement, normalizeGroups, createElement } from '../src/renderer/js/model.js';
 import { formatClock } from '../src/renderer/js/draw-utils.js';
@@ -66,4 +66,22 @@ test('formats clock text', () => {
   assert.strictEqual(formatClock(date, { ...base, show_leading_zero: false, show_seconds: false }), '9:05');
   assert.strictEqual(formatClock(new Date(2026, 0, 1, 21, 5, 7), { ...base, time_format: '12h' }), '09:05:07 PM');
   assert.strictEqual(formatClock(new Date(2026, 0, 1, 0, 0, 0), { ...base, time_format: '12h', show_am_pm: false }), '12:00:00');
+});
+
+test('orientations map the upright canvas onto the 1280x480 panel', () => {
+  for (const name of ['landscape', 'portrait', 'landscape_inverted', 'portrait_inverted']) {
+    const { width, height } = getOrientation(name);
+    // Every canvas corner lands on a panel corner.
+    const corners = [[0, 0], [width, 0], [0, height], [width, height]].map(([x, y]) => canvasToPanel(name, x, y));
+    for (const { x, y } of corners) {
+      assert.ok([0, DISPLAY_WIDTH].includes(x) && [0, DISPLAY_HEIGHT].includes(y), `${name}: (${x}, ${y})`);
+    }
+  }
+  // Top-left of the theme ends up at the panel corner the mounting implies.
+  assert.deepStrictEqual(canvasToPanel('landscape', 0, 0), { x: 0, y: 0 });
+  assert.deepStrictEqual(canvasToPanel('landscape_inverted', 0, 0), { x: 1280, y: 480 });
+  assert.deepStrictEqual(canvasToPanel('portrait', 0, 0), { x: 1280, y: 0 });
+  assert.deepStrictEqual(canvasToPanel('portrait_inverted', 0, 0), { x: 0, y: 480 });
+  assert.deepStrictEqual(getOrientation('portrait'), { label: 'Portrait', rotation: 90, width: 480, height: 1280 });
+  assert.strictEqual(getOrientation('bogus').rotation, 0);
 });

@@ -140,6 +140,10 @@ Go to **Display > Diagnose Sensors** to verify sensor connection.
 4. **Configure properties** in the Properties panel (right side)
 5. **Save as preset** via File > Save as Preset
 
+### Display Orientation
+
+Use the orientation menu in the toolbar to match how the display is mounted in your case: **Landscape**, **Portrait**, **Landscape (inverted)** or **Portrait (inverted)**. You design the theme upright (1280×480 for landscape, 480×1280 for portrait) and Thermal Engine rotates each frame before sending it to the panel. Orientation is saved with each theme and preset. If Portrait comes out upside down on your panel, use Portrait (inverted).
+
 ### Keyboard Shortcuts
 
 | Shortcut | Action |

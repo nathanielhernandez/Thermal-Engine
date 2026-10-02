@@ -21,19 +21,16 @@
 
     <main id="center">
       <div id="toolbar">
-        <label class="tool-field grow">
-          <span>Theme</span>
-          <input id="theme-name" class="text-input" type="text" spellcheck="false">
+        <label class="tool-field grow" title="Theme name">
+          <input id="theme-name" class="text-input" type="text" spellcheck="false" placeholder="Theme name">
         </label>
         <button id="save-btn" class="btn primary" title="Save to presets (Ctrl+S)">Save</button>
         <div class="tool-sep"></div>
         <button id="undo-btn" class="btn icon" title="Undo (Ctrl+Z)">↶</button>
         <button id="redo-btn" class="btn icon" title="Redo (Ctrl+Y)">↷</button>
         <div class="tool-sep"></div>
-        <label class="tool-field">
-          <span>Background</span>
-          <input id="bg-color" class="color-input" type="color">
-        </label>
+        <select id="orientation" class="select" title="Orientation: match how the display is mounted in your case"></select>
+        <input id="bg-color" class="color-input" type="color" title="Background color">
         <label class="tool-field">
           <span>Video</span>
           <button id="video-btn" class="btn">None</button>

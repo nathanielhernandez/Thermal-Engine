@@ -20,6 +20,8 @@ test('rejects malformed themes', () => {
   assert.strictEqual(validateTheme({ elements: [{ type: 'text', x: '5' }] }).valid, false);
   assert.strictEqual(validateTheme({ elements: [{ type: 'image', image_path: 'C:\\a\\..\\b.png' }] }).valid, false);
   assert.strictEqual(validateTheme({ name: 'ok', elements: [{ type: 'text', x: 5, color: '#fff' }] }).valid, true);
+  assert.strictEqual(validateTheme({ orientation: 'portrait_inverted', display_width: 480, display_height: 1280 }).valid, true);
+  assert.strictEqual(validateTheme({ orientation: 'sideways' }).valid, false);
 });
 
 test('path and filename checks', () => {

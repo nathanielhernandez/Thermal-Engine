@@ -1,24 +1,25 @@
 /** Preset gallery: click to load, right-click to set default or delete. */
 
-import { DISPLAY_WIDTH, DISPLAY_HEIGHT } from '../constants.js';
+import { getOrientation } from '../constants.js';
 import { normalizeElement } from '../model.js';
 import { renderScene, createRenderEnv, advanceEnv } from '../render.js';
 import { h, showContextMenu, promptText } from './dom.js';
 
-const THUMB_WIDTH = 300;
-const THUMB_HEIGHT = Math.round(THUMB_WIDTH * DISPLAY_HEIGHT / DISPLAY_WIDTH);
+const THUMB_SIZE = 300;
 
 /** Render preset data to a data URL for presets saved without a thumbnail. */
 async function renderThumbnail(data) {
-  const canvas = new OffscreenCanvas(DISPLAY_WIDTH, DISPLAY_HEIGHT);
+  const { width, height } = getOrientation(data.orientation);
+  const canvas = new OffscreenCanvas(width, height);
   const ctx = canvas.getContext('2d', { alpha: false });
   const elements = (data.elements || []).map(normalizeElement);
   const env = advanceEnv(createRenderEnv(), elements);
   renderScene(ctx, { backgroundColor: data.background_color || '#0f0f19', elements, video: null }, env);
-  const thumb = new OffscreenCanvas(THUMB_WIDTH, THUMB_HEIGHT);
+  const scale = THUMB_SIZE / Math.max(width, height);
+  const thumb = new OffscreenCanvas(Math.round(width * scale), Math.round(height * scale));
   const tctx = thumb.getContext('2d');
   tctx.imageSmoothingQuality = 'high';
-  tctx.drawImage(canvas, 0, 0, THUMB_WIDTH, THUMB_HEIGHT);
+  tctx.drawImage(canvas, 0, 0, thumb.width, thumb.height);
   const blob = await thumb.convertToBlob({ type: 'image/png' });
   return URL.createObjectURL(blob);
 }
@@ -104,8 +105,10 @@ export class PresetsPanel {
     const data = {
       name,
       background_color: '#000000',
-      display_width: DISPLAY_WIDTH,
-      display_height: DISPLAY_HEIGHT,
+      // New presets start in the current orientation, which usually matches how the panel is mounted.
+      orientation: this.app.store.orientation,
+      display_width: getOrientation(this.app.store.orientation).width,
+      display_height: getOrientation(this.app.store.orientation).height,
       elements: [],
       video_background: { video_path: '', fit_mode: 'fit_height', enabled: false },
     };

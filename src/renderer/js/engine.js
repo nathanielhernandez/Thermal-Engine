@@ -6,7 +6,7 @@
  * the window is hidden in the tray.
  */
 
-import { DISPLAY_WIDTH, DISPLAY_HEIGHT } from './constants.js';
+import { DISPLAY_WIDTH, DISPLAY_HEIGHT, getOrientation } from './constants.js';
 import { renderScene, createRenderEnv, advanceEnv } from './render.js';
 
 const IDLE_CHECK_MS = 250;
@@ -16,8 +16,11 @@ export class Engine {
     this.store = store;
     this.sendFrame = sendFrame;
     this.onFrame = onFrame;
+    // Upright theme canvas (sized by orientation) and the native panel frame.
     this.canvas = new OffscreenCanvas(DISPLAY_WIDTH, DISPLAY_HEIGHT);
     this.ctx = this.canvas.getContext('2d', { alpha: false });
+    this.panel = new OffscreenCanvas(DISPLAY_WIDTH, DISPLAY_HEIGHT);
+    this.panelCtx = this.panel.getContext('2d', { alpha: false });
     this.env = createRenderEnv();
     this.sensors = {};
     this.connected = false;
@@ -78,6 +81,11 @@ export class Engine {
   }
 
   render() {
+    const { width, height } = getOrientation(this.store.orientation);
+    if (this.canvas.width !== width || this.canvas.height !== height) {
+      this.canvas.width = width;
+      this.canvas.height = height;
+    }
     this.applySensorValues();
     advanceEnv(this.env, this.store.elements);
     renderScene(this.ctx, this.store.scene, this.env);
@@ -111,7 +119,7 @@ export class Engine {
     if (this.encoding) return;
     this.encoding = true;
     try {
-      const blob = await this.canvas.convertToBlob({ type: 'image/jpeg', quality: this.jpegQuality });
+      const blob = await this._panelFrame().convertToBlob({ type: 'image/jpeg', quality: this.jpegQuality });
       this.sendFrame(await blob.arrayBuffer());
     } catch (err) {
       console.error('[Engine] Frame encode failed:', err);
@@ -120,13 +128,26 @@ export class Engine {
     }
   }
 
-  /** Current frame as PNG bytes, optionally scaled to fit `maxWidth`. */
-  async snapshotPng(maxWidth = DISPLAY_WIDTH) {
+  /** The current frame rotated into the panel's native 1280x480 orientation. */
+  _panelFrame() {
+    const { rotation } = getOrientation(this.store.orientation);
+    if (rotation === 0) return this.canvas;
+    const ctx = this.panelCtx;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.translate(DISPLAY_WIDTH / 2, DISPLAY_HEIGHT / 2);
+    ctx.rotate((rotation * Math.PI) / 180);
+    ctx.drawImage(this.canvas, -this.canvas.width / 2, -this.canvas.height / 2);
+    return this.panel;
+  }
+
+  /** Current upright frame as PNG bytes, scaled so its longest side fits `maxSize`. */
+  async snapshotPng(maxSize = DISPLAY_WIDTH) {
     this.render();
-    const scale = Math.min(1, maxWidth / DISPLAY_WIDTH);
+    const { width, height } = this.canvas;
+    const scale = Math.min(1, maxSize / Math.max(width, height));
     let source = this.canvas;
     if (scale < 1) {
-      source = new OffscreenCanvas(Math.round(DISPLAY_WIDTH * scale), Math.round(DISPLAY_HEIGHT * scale));
+      source = new OffscreenCanvas(Math.round(width * scale), Math.round(height * scale));
       const ctx = source.getContext('2d');
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(this.canvas, 0, 0, source.width, source.height);

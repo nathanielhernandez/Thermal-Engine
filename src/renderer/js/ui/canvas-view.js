@@ -3,7 +3,6 @@
  * boxes, and handles selecting, dragging, resizing and nudging elements.
  */
 
-import { DISPLAY_WIDTH, DISPLAY_HEIGHT } from '../constants.js';
 import { elementBounds, isRadial } from '../model.js';
 
 const HANDLE_SIZE = 10;
@@ -37,6 +36,10 @@ export class CanvasView {
     canvas.addEventListener('pointerup', (e) => this.onPointerUp(e));
     canvas.addEventListener('pointercancel', (e) => this.onPointerUp(e));
     canvas.addEventListener('keydown', (e) => this.onKeyDown(e));
+    store.on('theme', () => {
+      const { width, height } = store.canvasSize;
+      if (width !== this.size?.width || height !== this.size?.height) this.layout();
+    });
     this.layout();
   }
 
@@ -44,9 +47,11 @@ export class CanvasView {
     const wrap = this.canvas.parentElement;
     const available = Math.max(200, wrap.clientWidth - 32);
     const availableH = Math.max(100, wrap.clientHeight - 32);
-    this.scale = Math.min(1, available / DISPLAY_WIDTH, availableH / DISPLAY_HEIGHT);
-    const cssW = Math.round(DISPLAY_WIDTH * this.scale);
-    const cssH = Math.round(DISPLAY_HEIGHT * this.scale);
+    this.size = this.store.canvasSize;
+    const { width, height } = this.size;
+    this.scale = Math.min(1, available / width, availableH / height);
+    const cssW = Math.round(width * this.scale);
+    const cssH = Math.round(height * this.scale);
     const dpr = window.devicePixelRatio || 1;
     this.canvas.style.width = `${cssW}px`;
     this.canvas.style.height = `${cssH}px`;
@@ -61,9 +66,10 @@ export class CanvasView {
     const dpr = window.devicePixelRatio || 1;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingQuality = 'high';
-    const w = DISPLAY_WIDTH * this.scale;
-    const h = DISPLAY_HEIGHT * this.scale;
-    ctx.drawImage(this.engine.canvas, 0, 0, w, h);
+    const { width, height } = this.size;
+    // The engine canvas is resized when orientation changes; skip until it catches up.
+    if (this.engine.canvas.width !== width || this.engine.canvas.height !== height) return;
+    ctx.drawImage(this.engine.canvas, 0, 0, width * this.scale, height * this.scale);
 
     const selection = this.store.selection;
     if (selection.length > 1) {
@@ -213,9 +219,10 @@ export class CanvasView {
   }
 
   applyDrag(ddx, ddy) {
+    const { width, height } = this.size;
     for (const [el, o] of this.op.originals) {
-      el.x = Math.round(Math.max(0, Math.min(o.x + ddx, DISPLAY_WIDTH - 50)));
-      el.y = Math.round(Math.max(0, Math.min(o.y + ddy, DISPLAY_HEIGHT - 50)));
+      el.x = Math.round(Math.max(0, Math.min(o.x + ddx, width - 50)));
+      el.y = Math.round(Math.max(0, Math.min(o.y + ddy, height - 50)));
     }
   }
 
